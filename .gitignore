@@ -1,0 +1,22 @@
+# Database backups — separately save on laptop
+*.backup
+*.dump
+
+# Frontend generated files
+node_modules/
+dist/
+
+# Backend generated files
+bin/
+obj/
+.vs/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+
+# OS files
+.DS_Store
+Thumbs.db
