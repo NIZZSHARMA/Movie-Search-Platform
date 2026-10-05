@@ -115,3 +115,222 @@ END;
 $$;
 
 ROLLBACK;
+--
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_returned_id BIGINT;
+BEGIN
+    -- Create a temporary test user
+    v_user_id := framework.create_user(
+        'portfolio_update_test_before',
+        'portfolio_update_before@example.com',
+        'TEST_HASH_BEFORE'
+    );
+
+    -- Update the same user
+    v_returned_id := framework.update_user(
+        v_user_id,
+        '  portfolio_update_test_after  ',
+        '  portfolio_update_after@example.com  ',
+        'TEST_HASH_AFTER'
+    );
+
+    -- Verify returned ID and saved values
+    IF v_returned_id IS DISTINCT FROM v_user_id THEN
+        RAISE EXCEPTION 'FAIL: Returned user ID is incorrect';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM framework.app_user
+        WHERE user_id = v_user_id
+          AND username = 'portfolio_update_test_after'
+          AND email = 'portfolio_update_after@example.com'
+          AND password_hash = 'TEST_HASH_AFTER'
+    ) THEN
+        RAISE EXCEPTION 'FAIL: User details were not updated correctly';
+    END IF;
+
+    RAISE NOTICE 'PASS: User ID stayed the same';
+    RAISE NOTICE 'PASS: Username and email updated and trimmed';
+    RAISE NOTICE 'PASS: Password hash updated';
+END;
+$$;
+
+ROLLBACK;
+----
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_a BIGINT;
+    v_user_b BIGINT;
+    v_constraint TEXT;
+BEGIN
+    v_user_a := framework.create_user(
+        'portfolio_update_a',
+        'portfolio_update_a@example.com',
+        'TEST_HASH_A'
+    );
+
+    v_user_b := framework.create_user(
+        'portfolio_update_b',
+        'portfolio_update_b@example.com',
+        'TEST_HASH_B'
+    );
+
+    -- Reject another user's username
+    BEGIN
+        PERFORM framework.update_user(
+            v_user_b,
+            'portfolio_update_a',
+            'portfolio_update_b@example.com',
+            'TEST_HASH_CHANGED'
+        );
+
+        RAISE EXCEPTION 'FAIL: Duplicate username was accepted';
+    EXCEPTION
+        WHEN unique_violation THEN
+            GET STACKED DIAGNOSTICS
+                v_constraint = CONSTRAINT_NAME;
+
+            IF v_constraint <> 'app_user_username_key' THEN
+                RAISE;
+            END IF;
+
+            RAISE NOTICE 'PASS: Duplicate username was rejected';
+    END;
+
+    -- Reject another user's email
+    BEGIN
+        PERFORM framework.update_user(
+            v_user_b,
+            'portfolio_update_b',
+            'portfolio_update_a@example.com',
+            'TEST_HASH_CHANGED'
+        );
+
+        RAISE EXCEPTION 'FAIL: Duplicate email was accepted';
+    EXCEPTION
+        WHEN unique_violation THEN
+            GET STACKED DIAGNOSTICS
+                v_constraint = CONSTRAINT_NAME;
+
+            IF v_constraint <> 'app_user_email_key' THEN
+                RAISE;
+            END IF;
+
+            RAISE NOTICE 'PASS: Duplicate email was rejected';
+    END;
+
+    -- Failed updates must leave the original values intact
+    IF NOT EXISTS (
+        SELECT 1
+        FROM framework.app_user
+        WHERE user_id = v_user_b
+          AND username = 'portfolio_update_b'
+          AND email = 'portfolio_update_b@example.com'
+          AND password_hash = 'TEST_HASH_B'
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Rejected update changed user details';
+    END IF;
+
+    RAISE NOTICE 'PASS: Rejected updates preserved original details';
+END;
+$$;
+
+ROLLBACK;
+----
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_case RECORD;
+BEGIN
+    v_user_id := framework.create_user(
+        'portfolio_update_validation',
+        'portfolio_update_validation@example.com',
+        'TEST_HASH_ORIGINAL'
+    );
+
+    FOR v_case IN
+        SELECT *
+        FROM (
+            VALUES
+                ('NULL user ID',
+                 NULL::BIGINT, 'valid_name', 'valid@example.com',
+                 'TEST_HASH', 'User ID is required'),
+
+                ('NULL username',
+                 v_user_id, NULL, 'valid@example.com',
+                 'TEST_HASH', 'Username is required'),
+
+                ('Blank username',
+                 v_user_id, '   ', 'valid@example.com',
+                 'TEST_HASH', 'Username is required'),
+
+                ('NULL email',
+                 v_user_id, 'valid_name', NULL,
+                 'TEST_HASH', 'Email is required'),
+
+                ('Blank email',
+                 v_user_id, 'valid_name', '   ',
+                 'TEST_HASH', 'Email is required'),
+
+                ('NULL password hash',
+                 v_user_id, 'valid_name', 'valid@example.com',
+                 NULL, 'Password hash is required'),
+
+                ('Blank password hash',
+                 v_user_id, 'valid_name', 'valid@example.com',
+                 '   ', 'Password hash is required')
+        ) AS cases(label, user_id, username, email, hash, expected)
+    LOOP
+        BEGIN
+            PERFORM framework.update_user(
+                v_case.user_id,
+                v_case.username,
+                v_case.email,
+                v_case.hash
+            );
+
+            RAISE EXCEPTION 'FAIL: % was accepted', v_case.label;
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM = v_case.expected THEN
+                    RAISE NOTICE 'PASS: % was rejected', v_case.label;
+                ELSE
+                    RAISE;
+                END IF;
+        END;
+    END LOOP;
+
+    -- Remove only this temporary user to test a missing user ID
+    DELETE FROM framework.app_user
+    WHERE user_id = v_user_id;
+
+    BEGIN
+        PERFORM framework.update_user(
+            v_user_id,
+            'valid_name',
+            'valid@example.com',
+            'TEST_HASH'
+        );
+
+        RAISE EXCEPTION 'FAIL: Missing user was accepted';
+    EXCEPTION
+        WHEN raise_exception THEN
+            IF SQLERRM = format('User not found: %s', v_user_id) THEN
+                RAISE NOTICE 'PASS: Missing user was rejected';
+            ELSE
+                RAISE;
+            END IF;
+    END;
+END;
+$$;
+
+ROLLBACK;
