@@ -443,20 +443,38 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 AS $$
 DECLARE
+    v_input TEXT;
     v_nconst TEXT;
+    v_matches BIGINT;
 BEGIN
     IF p_nconst IS NULL OR btrim(p_nconst) = '' THEN
         RAISE EXCEPTION 'Person ID is required';
     END IF;
 
-    v_nconst := btrim(p_nconst);
+    v_input := btrim(p_nconst);
 
-    IF NOT EXISTS (
-        SELECT 1
+    -- Accept a person ID directly.
+    SELECT p.nconst
+    INTO v_nconst
+    FROM movie.person AS p
+    WHERE p.nconst = v_input;
+
+    -- Otherwise resolve a full name, ignoring letter case.
+    IF v_nconst IS NULL THEN
+        SELECT COUNT(*), MIN(p.nconst)
+        INTO v_matches, v_nconst
         FROM movie.person AS p
-        WHERE p.nconst = v_nconst
-    ) THEN
-        RAISE EXCEPTION 'Person not found: %', v_nconst;
+        WHERE lower(p.primary_name) = lower(v_input);
+
+        IF v_matches = 0 THEN
+            RAISE EXCEPTION 'Person not found: %', v_input;
+        END IF;
+
+        IF v_matches > 1 THEN
+            RAISE EXCEPTION
+                'Multiple persons have this name: %. Use a person ID.',
+                v_input;
+        END IF;
     END IF;
 
     RETURN QUERY
