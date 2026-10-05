@@ -1051,3 +1051,172 @@ END;
 $$;
 
 ROLLBACK;
+--------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_missing_user_id BIGINT;
+    v_title TEXT := 'portfolio_rating_validation_title';
+    v_missing_title TEXT := 'portfolio_rating_missing_title';
+    v_case RECORD;
+    v_average NUMERIC;
+    v_votes BIGINT;
+BEGIN
+    v_user_id := framework.create_user(
+        'portfolio_rating_validation',
+        'portfolio_rating_validation@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    -- Title with no IMDb rating or votes
+    INSERT INTO movie.title (tconst, primary_title)
+    VALUES (v_title, 'Rating validation test');
+
+    -- Check NULL, blank and out-of-range inputs
+    FOR v_case IN
+        SELECT *
+        FROM (VALUES
+            (NULL::BIGINT, v_title, 5,
+             'User ID is required'::TEXT),
+            (v_user_id, NULL::TEXT, 5,
+             'Title ID is required'),
+            (v_user_id, '', 5,
+             'Title ID is required'),
+            (v_user_id, '   ', 5,
+             'Title ID is required'),
+            (v_user_id, v_title, NULL::INTEGER,
+             'Rating must be an integer between 1 and 10'),
+            (v_user_id, v_title, 0,
+             'Rating must be an integer between 1 and 10'),
+            (v_user_id, v_title, 11,
+             'Rating must be an integer between 1 and 10')
+        ) AS cases(user_id, title_id, rating, expected_error)
+    LOOP
+        BEGIN
+            PERFORM movie.rate(
+                v_case.user_id,
+                v_case.title_id,
+                v_case.rating
+            );
+
+            RAISE EXCEPTION 'FAIL: Expected error: %',
+                v_case.expected_error;
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   v_case.expected_error THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: %', v_case.expected_error;
+        END;
+    END LOOP;
+
+    -- Obtain an ID belonging to a deleted test user
+    v_missing_user_id := framework.create_user(
+        'portfolio_rating_missing_user',
+        'portfolio_rating_missing@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    DELETE FROM framework.app_user
+    WHERE user_id = v_missing_user_id;
+
+    BEGIN
+        PERFORM movie.rate(v_missing_user_id, v_title, 5);
+        RAISE EXCEPTION 'FAIL: Missing user was accepted';
+    EXCEPTION
+        WHEN foreign_key_violation THEN
+            RAISE NOTICE 'PASS: Missing user was rejected';
+    END;
+
+    -- Ensure the missing title ID does not exist
+    WHILE EXISTS (
+        SELECT 1 FROM movie.title
+        WHERE tconst = v_missing_title
+    ) LOOP
+        v_missing_title := v_missing_title || '_x';
+    END LOOP;
+
+    BEGIN
+        PERFORM movie.rate(v_user_id, v_missing_title, 5);
+        RAISE EXCEPTION 'FAIL: Missing title was accepted';
+    EXCEPTION
+        WHEN raise_exception THEN
+            IF SQLERRM IS DISTINCT FROM
+               format('Title not found: %s', v_missing_title) THEN
+                RAISE;
+            END IF;
+
+            RAISE NOTICE 'PASS: Missing title was rejected';
+    END;
+
+    IF EXISTS (
+        SELECT 1 FROM framework.user_title_rating
+        WHERE tconst = v_title
+    ) OR EXISTS (
+        SELECT 1 FROM framework.title_rating_history
+        WHERE tconst = v_title
+    ) THEN
+        RAISE EXCEPTION
+            'FAIL: Invalid calls saved a rating or history';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Invalid calls saved no rating or history';
+
+    SELECT average_rating, num_votes
+    INTO v_average, v_votes
+    FROM movie.title_rating
+    WHERE tconst = v_title;
+
+    IF v_average IS NOT NULL
+       OR v_votes IS DISTINCT FROM 0::BIGINT THEN
+        RAISE EXCEPTION
+            'FAIL: Unrated title should have NULL average and zero votes';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Unrated title has NULL average and zero votes';
+
+    -- Lower boundary: first local rating
+    v_average := movie.rate(v_user_id, v_title, 1);
+
+    SELECT num_votes INTO v_votes
+    FROM movie.title_rating
+    WHERE tconst = v_title;
+
+    IF v_average IS DISTINCT FROM 1::NUMERIC
+       OR v_votes IS DISTINCT FROM 1::BIGINT THEN
+        RAISE EXCEPTION 'FAIL: Rating 1 was not handled correctly';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Rating 1 accepted without IMDb baseline';
+
+    -- Upper boundary: replace the same user's rating
+    v_average := movie.rate(v_user_id, v_title, 10);
+
+    SELECT num_votes INTO v_votes
+    FROM movie.title_rating
+    WHERE tconst = v_title;
+
+    IF v_average IS DISTINCT FROM 10::NUMERIC
+       OR v_votes IS DISTINCT FROM 1::BIGINT
+       OR (
+           SELECT COUNT(*)
+           FROM framework.title_rating_history
+           WHERE tconst = v_title
+       ) <> 2 THEN
+        RAISE EXCEPTION
+            'FAIL: Rating 10, vote count or history is incorrect';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Rating 10 accepted, one vote and two history entries';
+END;
+$$;
+
+ROLLBACK;
