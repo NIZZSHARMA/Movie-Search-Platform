@@ -334,3 +334,89 @@ END;
 $$;
 
 ROLLBACK;
+------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_tconst TEXT;
+BEGIN
+    SELECT tconst INTO v_tconst
+    FROM movie.title
+    ORDER BY tconst
+    LIMIT 1;
+
+    IF v_tconst IS NULL THEN
+        RAISE EXCEPTION 'FAIL: No title available for testing';
+    END IF;
+
+    v_user_id := framework.create_user(
+        'portfolio_bookmark_test',
+        'portfolio_bookmark_test@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    -- Add bookmark, including spaces around the title ID
+    IF framework.add_title_bookmark(
+        v_user_id, '  ' || v_tconst || '  '
+    ) IS DISTINCT FROM TRUE THEN
+        RAISE EXCEPTION 'FAIL: Bookmark was not added';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM framework.user_bookmark_title
+        WHERE user_id = v_user_id AND tconst = v_tconst
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Bookmark row is missing';
+    END IF;
+
+    RAISE NOTICE 'PASS: Bookmark added and title ID trimmed';
+
+    -- Adding again must not create a duplicate
+    IF framework.add_title_bookmark(
+        v_user_id, v_tconst
+    ) IS DISTINCT FROM FALSE THEN
+        RAISE EXCEPTION 'FAIL: Duplicate add returned an incorrect result';
+    END IF;
+
+    IF (
+        SELECT COUNT(*)
+        FROM framework.user_bookmark_title
+        WHERE user_id = v_user_id AND tconst = v_tconst
+    ) <> 1 THEN
+        RAISE EXCEPTION 'FAIL: Bookmark count is incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Duplicate bookmark was not created';
+
+    -- Remove bookmark
+    IF framework.remove_title_bookmark(
+        v_user_id, '  ' || v_tconst || '  '
+    ) IS DISTINCT FROM TRUE THEN
+        RAISE EXCEPTION 'FAIL: Bookmark was not removed';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM framework.user_bookmark_title
+        WHERE user_id = v_user_id AND tconst = v_tconst
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Bookmark still exists';
+    END IF;
+
+    RAISE NOTICE 'PASS: Bookmark removed';
+
+ -- Removing again must return false
+    IF framework.remove_title_bookmark(
+        v_user_id, v_tconst
+    ) IS DISTINCT FROM FALSE THEN
+        RAISE EXCEPTION 'FAIL: Repeated removal returned an incorrect result';
+    END IF;
+
+    RAISE NOTICE 'PASS: Missing bookmark removal returned false';
+END;
+$$;
+
+ROLLBACK;

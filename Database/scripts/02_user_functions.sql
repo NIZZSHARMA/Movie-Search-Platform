@@ -78,3 +78,58 @@ BEGIN
     RETURN v_user_id;
 END;
 $$;
+-------------------
+CREATE OR REPLACE FUNCTION framework.add_title_bookmark(
+    p_user_id BIGINT,
+    p_tconst TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_rows INTEGER;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    IF p_tconst IS NULL OR btrim(p_tconst) = '' THEN
+        RAISE EXCEPTION 'Title ID is required';
+    END IF;
+
+    INSERT INTO framework.user_bookmark_title (user_id, tconst)
+    VALUES (p_user_id, btrim(p_tconst))
+    ON CONFLICT (user_id, tconst) DO NOTHING;
+
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RETURN v_rows = 1;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION framework.remove_title_bookmark(
+    p_user_id BIGINT,
+    p_tconst TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_rows INTEGER;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    IF p_tconst IS NULL OR btrim(p_tconst) = '' THEN
+        RAISE EXCEPTION 'Title ID is required';
+    END IF;
+
+    DELETE FROM framework.user_bookmark_title
+    WHERE user_id = p_user_id
+      AND tconst = btrim(p_tconst);
+
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RETURN v_rows = 1;
+END;
+$$;
