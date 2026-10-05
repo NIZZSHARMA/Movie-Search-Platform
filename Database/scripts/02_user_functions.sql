@@ -580,3 +580,90 @@ BEGIN
         p.nconst;
 END;
 $$;
+--------------
+CREATE OR REPLACE FUNCTION movie.similar_by_genre(
+    p_tconst TEXT,
+    p_limit INTEGER DEFAULT 10
+)
+RETURNS TABLE (
+    tconst TEXT,
+    primary_title TEXT,
+    shared_genre_count BIGINT,
+    similarity_score NUMERIC
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tconst TEXT;
+    v_source_count BIGINT;
+BEGIN
+    IF p_tconst IS NULL OR btrim(p_tconst) = '' THEN
+        RAISE EXCEPTION 'Title ID is required';
+    END IF;
+
+    IF p_limit IS NULL OR p_limit < 1 THEN
+        RAISE EXCEPTION 'Limit must be a positive integer';
+    END IF;
+
+    v_tconst := btrim(p_tconst);
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM movie.title AS t
+        WHERE t.tconst = v_tconst
+    ) THEN
+        RAISE EXCEPTION 'Title not found: %', v_tconst;
+    END IF;
+
+    SELECT COUNT(*)
+    INTO v_source_count
+    FROM movie.title_genre AS g
+    WHERE g.tconst = v_tconst;
+
+    IF v_source_count = 0 THEN
+        RETURN;
+    END IF;
+
+    RETURN QUERY
+    WITH shared AS (
+        SELECT
+            other.tconst,
+            COUNT(*) AS shared_count
+        FROM movie.title_genre AS source
+        JOIN movie.title_genre AS other
+            ON other.genre = source.genre
+        WHERE source.tconst = v_tconst
+          AND other.tconst <> v_tconst
+        GROUP BY other.tconst
+    ),
+    scored AS (
+        SELECT
+            s.tconst,
+            s.shared_count,
+            s.shared_count::NUMERIC
+                / (
+                    v_source_count
+                    + (
+                        SELECT COUNT(*)
+                        FROM movie.title_genre AS g
+                        WHERE g.tconst = s.tconst
+                    )
+                    - s.shared_count
+                ) AS score
+        FROM shared AS s
+    )
+    SELECT
+        t.tconst,
+        t.primary_title,
+        s.shared_count,
+        s.score
+    FROM scored AS s
+    JOIN movie.title AS t
+        ON t.tconst = s.tconst
+    ORDER BY
+        s.score DESC,
+        s.shared_count DESC,
+        t.tconst
+    LIMIT p_limit;
+END;
+$$;

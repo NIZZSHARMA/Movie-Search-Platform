@@ -1811,3 +1811,175 @@ END;
 $$;
 
 ROLLBACK;
+-------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_result JSONB;
+    v_count BIGINT;
+    v_input TEXT;
+    v_limit INTEGER;
+    v_missing TEXT := 'test_sim_missing';
+BEGIN
+    INSERT INTO movie.genre (genre)
+    VALUES
+        ('test_sim_genre_a'),
+        ('test_sim_genre_b'),
+        ('test_sim_genre_c');
+
+    INSERT INTO movie.title (tconst, primary_title)
+    VALUES
+        ('test_sim_source', 'Similarity Source'),
+        ('test_sim_exact', 'Exact Genre Match'),
+        ('test_sim_subset', 'One Genre Match'),
+        ('test_sim_partial', 'Partial Genre Match'),
+        ('test_sim_unrelated', 'Unrelated Movie'),
+        ('test_sim_no_genres', 'Movie Without Genres');
+
+    INSERT INTO movie.title_genre (tconst, genre)
+    VALUES
+        ('test_sim_source', 'test_sim_genre_a'),
+        ('test_sim_source', 'test_sim_genre_b'),
+        ('test_sim_exact', 'test_sim_genre_a'),
+        ('test_sim_exact', 'test_sim_genre_b'),
+        ('test_sim_subset', 'test_sim_genre_a'),
+        ('test_sim_partial', 'test_sim_genre_a'),
+        ('test_sim_partial', 'test_sim_genre_c'),
+        ('test_sim_unrelated', 'test_sim_genre_c');
+
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', s.tconst,
+            'shared', s.shared_genre_count
+        )
+        ORDER BY s.position
+    )
+    INTO v_result
+    FROM movie.similar_by_genre(
+        '  test_sim_source  '
+    ) WITH ORDINALITY AS s(
+        tconst, primary_title,
+        shared_genre_count, similarity_score, position
+    );
+
+    IF v_result IS DISTINCT FROM
+       '[{"id":"test_sim_exact","shared":2},
+         {"id":"test_sim_subset","shared":1},
+         {"id":"test_sim_partial","shared":1}]'::JSONB THEN
+        RAISE EXCEPTION
+            'FAIL: Incorrect similar titles or order: %',
+            v_result;
+    END IF;
+
+    RAISE NOTICE 'PASS: Correct similar titles and order';
+    RAISE NOTICE 'PASS: Source and unrelated titles excluded';
+    RAISE NOTICE 'PASS: Title ID trimmed';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.similar_by_genre('test_sim_source') AS s
+    WHERE
+        (s.tconst = 'test_sim_exact'
+         AND s.primary_title = 'Exact Genre Match'
+         AND s.similarity_score = 1)
+        OR
+        (s.tconst = 'test_sim_subset'
+         AND s.similarity_score = 0.5)
+        OR
+        (s.tconst = 'test_sim_partial'
+         AND abs(s.similarity_score - 1::NUMERIC / 3)
+             < 0.000001);
+
+    IF v_count <> 3 THEN
+        RAISE EXCEPTION 'FAIL: Similarity scores are incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Scores are 1, 0.5 and 1/3';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.similar_by_genre('test_sim_source', 1) AS s
+    WHERE s.tconst = 'test_sim_exact';
+
+    IF v_count <> 1
+       OR (
+           SELECT COUNT(*)
+           FROM movie.similar_by_genre('test_sim_source', 1)
+       ) <> 1 THEN
+        RAISE EXCEPTION 'FAIL: Result limit is incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Limit returns only the best match';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.similar_by_genre('test_sim_no_genres');
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION
+            'FAIL: Title without genres should return zero rows';
+    END IF;
+
+    RAISE NOTICE 'PASS: Title without genres returns zero rows';
+
+    FOREACH v_input IN ARRAY ARRAY[NULL::TEXT, '', '   ']
+    LOOP
+        BEGIN
+            PERFORM *
+            FROM movie.similar_by_genre(v_input);
+
+            RAISE EXCEPTION 'FAIL: Invalid title ID accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'Title ID is required' THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: NULL or blank title ID rejected';
+        END;
+    END LOOP;
+
+    FOREACH v_limit IN ARRAY ARRAY[NULL::INTEGER, 0, -1]
+    LOOP
+        BEGIN
+            PERFORM *
+            FROM movie.similar_by_genre(
+                'test_sim_source', v_limit
+            );
+
+            RAISE EXCEPTION 'FAIL: Invalid limit accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'Limit must be a positive integer' THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: Invalid limit rejected';
+        END;
+    END LOOP;
+
+    WHILE EXISTS (
+        SELECT 1 FROM movie.title
+        WHERE tconst = v_missing
+    ) LOOP
+        v_missing := v_missing || '_x';
+    END LOOP;
+
+    BEGIN
+        PERFORM *
+        FROM movie.similar_by_genre(v_missing);
+
+        RAISE EXCEPTION 'FAIL: Missing title accepted';
+    EXCEPTION
+        WHEN raise_exception THEN
+            IF SQLERRM IS DISTINCT FROM
+               format('Title not found: %s', v_missing) THEN
+                RAISE;
+            END IF;
+
+            RAISE NOTICE 'PASS: Missing title rejected';
+    END;
+END;
+$$;
+
+ROLLBACK;
