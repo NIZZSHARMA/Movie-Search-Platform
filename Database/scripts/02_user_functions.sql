@@ -483,3 +483,46 @@ BEGIN
         p.nconst;
 END;
 $$;
+---------------
+BEGIN;
+
+-- Helps retrieve local ratings for each title
+CREATE INDEX IF NOT EXISTS user_title_rating_tconst_idx
+ON framework.user_title_rating (tconst);
+
+CREATE MATERIALIZED VIEW movie.person_rating AS
+WITH acting_titles AS (
+    SELECT DISTINCT c.nconst, c.tconst
+    FROM movie.credit AS c
+    WHERE c.category IN ('actor', 'actress')
+)
+SELECT
+    a.nconst,
+    SUM(r.average_rating * r.num_votes::NUMERIC)
+        / SUM(r.num_votes::NUMERIC) AS weighted_rating,
+    SUM(r.num_votes::NUMERIC) AS total_votes,
+    COUNT(*) AS rated_title_count
+FROM acting_titles AS a
+JOIN movie.title_rating AS r
+    ON r.tconst = a.tconst
+WHERE r.average_rating IS NOT NULL
+  AND r.num_votes > 0
+GROUP BY a.nconst
+WITH NO DATA;
+
+CREATE UNIQUE INDEX person_rating_nconst_idx
+ON movie.person_rating (nconst);
+
+CREATE OR REPLACE FUNCTION movie.refresh_person_ratings()
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    REFRESH MATERIALIZED VIEW movie.person_rating;
+END;
+$$;
+
+COMMIT;
+---
+-- Populate actor ratings after creating the materialized view
+SELECT movie.refresh_person_ratings();

@@ -1590,3 +1590,92 @@ END;
 $$;
 
 ROLLBACK;
+---------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_rating NUMERIC;
+    v_votes NUMERIC;
+    v_titles BIGINT;
+BEGIN
+    INSERT INTO movie.person (nconst, primary_name)
+    VALUES (
+        'test_person_weighted_rating',
+        'Temporary actor rating test'
+    );
+
+    INSERT INTO movie.title (
+        tconst, primary_title,
+        base_average_rating, base_num_votes
+    )
+    VALUES
+        ('test_actor_rating_title_a', 'Test movie A', 8, 100),
+        ('test_actor_rating_title_b', 'Test movie B', 6, 300);
+
+    INSERT INTO movie.credit (
+        tconst, ordering, nconst, category
+    )
+    VALUES
+        (
+            'test_actor_rating_title_a', 1,
+            'test_person_weighted_rating', 'actor'
+        ),
+        (
+            'test_actor_rating_title_a', 2,
+            'test_person_weighted_rating', 'actor'
+        ),
+        (
+            'test_actor_rating_title_b', 1,
+            'test_person_weighted_rating', 'actor'
+        );
+
+    PERFORM movie.refresh_person_ratings();
+
+    SELECT weighted_rating, total_votes, rated_title_count
+    INTO v_rating, v_votes, v_titles
+    FROM movie.person_rating
+    WHERE nconst = 'test_person_weighted_rating';
+
+    -- (8 × 100 + 6 × 300) / 400 = 6.5
+    IF v_rating IS DISTINCT FROM 6.5::NUMERIC THEN
+        RAISE EXCEPTION
+            'FAIL: Expected weighted rating 6.5, got %',
+            v_rating;
+    END IF;
+
+    RAISE NOTICE 'PASS: Vote-weighted actor rating is 6.5';
+
+    IF v_votes IS DISTINCT FROM 400::NUMERIC THEN
+        RAISE EXCEPTION
+            'FAIL: Expected 400 votes, got %', v_votes;
+    END IF;
+
+    RAISE NOTICE 'PASS: Total votes are 400';
+
+    IF v_titles IS DISTINCT FROM 2::BIGINT THEN
+        RAISE EXCEPTION
+            'FAIL: Expected 2 distinct titles, got %',
+            v_titles;
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Duplicate credit did not count the movie twice';
+END;
+$$;
+
+ROLLBACK;
+
+-- Check the restored actor ratings after the test
+SELECT
+    COUNT(*) AS actors_with_rating,
+    MIN(weighted_rating) AS lowest_rating,
+    MAX(weighted_rating) AS highest_rating,
+    COUNT(*) FILTER (
+        WHERE weighted_rating IS NULL
+           OR weighted_rating < 1
+           OR weighted_rating > 10
+           OR total_votes <= 0
+           OR rated_title_count <= 0
+    ) AS invalid_rows
+FROM movie.person_rating;
