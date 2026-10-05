@@ -813,3 +813,100 @@ END;
 $$;
 
 ROLLBACK;
+-----
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_missing_user_id BIGINT;
+    v_case RECORD;
+BEGIN
+    v_user_id := framework.create_user(
+        'portfolio_search_validation',
+        'portfolio_search_validation@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    FOR v_case IN
+        SELECT *
+        FROM (VALUES
+            (NULL::BIGINT, 'test'::TEXT,
+             'User ID is required'::TEXT),
+
+            (v_user_id, NULL::TEXT,
+             'Search text is required'),
+
+            (v_user_id, '',
+             'Search text is required'),
+
+            (v_user_id, '   ',
+             'Search text is required')
+        ) AS cases(user_id, query_text, expected_error)
+    LOOP
+        BEGIN
+            PERFORM *
+            FROM movie.string_search(
+                v_case.user_id,
+                v_case.query_text
+            );
+
+            RAISE EXCEPTION 'FAIL: Expected error: %',
+                v_case.expected_error;
+
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   v_case.expected_error THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: %',
+                    v_case.expected_error;
+        END;
+    END LOOP;
+
+    -- Create and delete our own user to obtain a missing ID
+    v_missing_user_id := framework.create_user(
+        'portfolio_search_missing_user',
+        'portfolio_search_missing_user@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    DELETE FROM framework.app_user
+    WHERE user_id = v_missing_user_id;
+
+    BEGIN
+        PERFORM *
+        FROM movie.string_search(
+            v_missing_user_id,
+            'test'
+        );
+
+        RAISE EXCEPTION
+            'FAIL: Missing user was accepted';
+
+    EXCEPTION
+        WHEN foreign_key_violation THEN
+            RAISE NOTICE
+                'PASS: Missing user was rejected';
+    END;
+
+    IF EXISTS (
+        SELECT 1
+        FROM framework.user_search_history
+        WHERE user_id IN (
+            v_user_id,
+            v_missing_user_id
+        )
+    ) THEN
+        RAISE EXCEPTION
+            'FAIL: Invalid search created history';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Invalid searches did not create history';
+END;
+$$;
+
+ROLLBACK;
