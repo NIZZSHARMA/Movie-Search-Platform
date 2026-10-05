@@ -420,3 +420,144 @@ END;
 $$;
 
 ROLLBACK;
+-------------
+CREATE OR REPLACE FUNCTION framework.add_person_bookmark(
+    p_user_id BIGINT,
+    p_nconst TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_rows INTEGER;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    IF p_nconst IS NULL OR btrim(p_nconst) = '' THEN
+        RAISE EXCEPTION 'Person ID is required';
+    END IF;
+
+    INSERT INTO framework.user_bookmark_person (user_id, nconst)
+    VALUES (p_user_id, btrim(p_nconst))
+    ON CONFLICT (user_id, nconst) DO NOTHING;
+
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RETURN v_rows = 1;
+END;
+$$;
+
+
+CREATE OR REPLACE FUNCTION framework.remove_person_bookmark(
+    p_user_id BIGINT,
+    p_nconst TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_rows INTEGER;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    IF p_nconst IS NULL OR btrim(p_nconst) = '' THEN
+        RAISE EXCEPTION 'Person ID is required';
+    END IF;
+
+    DELETE FROM framework.user_bookmark_person
+    WHERE user_id = p_user_id
+      AND nconst = btrim(p_nconst);
+
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RETURN v_rows = 1;
+END;
+$$;
+--------------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_nconst TEXT;
+BEGIN
+    SELECT nconst INTO v_nconst
+    FROM movie.person
+    ORDER BY nconst
+    LIMIT 1;
+
+    IF v_nconst IS NULL THEN
+        RAISE EXCEPTION 'FAIL: No person available for testing';
+    END IF;
+
+    v_user_id := framework.create_user(
+        'portfolio_person_bookmark_test',
+        'portfolio_person_bookmark_test@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    -- Add bookmark and check trimming
+    IF framework.add_person_bookmark(
+        v_user_id, '  ' || v_nconst || '  '
+    ) IS DISTINCT FROM TRUE THEN
+        RAISE EXCEPTION 'FAIL: Person bookmark was not added';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM framework.user_bookmark_person
+        WHERE user_id = v_user_id AND nconst = v_nconst
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Person bookmark row is missing';
+    END IF;
+
+    RAISE NOTICE 'PASS: Person bookmark added and ID trimmed';
+
+    -- Repeated addition must not create a duplicate
+    IF framework.add_person_bookmark(
+        v_user_id, v_nconst
+    ) IS DISTINCT FROM FALSE THEN
+        RAISE EXCEPTION 'FAIL: Duplicate add returned an incorrect result';
+    END IF;
+
+    IF (
+        SELECT COUNT(*)
+        FROM framework.user_bookmark_person
+        WHERE user_id = v_user_id AND nconst = v_nconst
+    ) <> 1 THEN
+        RAISE EXCEPTION 'FAIL: Person bookmark count is incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Duplicate person bookmark was not created';
+
+    -- Remove bookmark and check the row is gone
+    IF framework.remove_person_bookmark(
+        v_user_id, '  ' || v_nconst || '  '
+    ) IS DISTINCT FROM TRUE THEN
+        RAISE EXCEPTION 'FAIL: Person bookmark was not removed';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM framework.user_bookmark_person
+        WHERE user_id = v_user_id AND nconst = v_nconst
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Person bookmark still exists';
+    END IF;
+
+    RAISE NOTICE 'PASS: Person bookmark removed';
+
+    -- Repeated removal must return false
+    IF framework.remove_person_bookmark(
+        v_user_id, v_nconst
+    ) IS DISTINCT FROM FALSE THEN
+        RAISE EXCEPTION 'FAIL: Repeated removal returned an incorrect result';
+    END IF;
+
+    RAISE NOTICE 'PASS: Missing person bookmark removal returned false';
+END;
+$$;
+
+ROLLBACK;
