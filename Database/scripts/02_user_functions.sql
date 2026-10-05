@@ -386,3 +386,48 @@ BEGIN
     ORDER BY t.tconst;
 END;
 $$;
+------------
+CREATE OR REPLACE FUNCTION movie.name_search(
+    p_user_id BIGINT,
+    p_query TEXT
+)
+RETURNS TABLE (
+    nconst TEXT,
+    primary_name TEXT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_query TEXT;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    IF p_query IS NULL OR btrim(p_query) = '' THEN
+        RAISE EXCEPTION 'Search text is required';
+    END IF;
+
+    v_query := btrim(p_query);
+
+    INSERT INTO framework.user_search_history (
+        user_id, query_text
+    )
+    VALUES (
+        p_user_id,
+        jsonb_build_object(
+            'search_type', 'name',
+            'query', v_query
+        )::TEXT
+    );
+
+    RETURN QUERY
+    SELECT p.nconst, p.primary_name
+    FROM movie.person AS p
+    WHERE strpos(
+        lower(p.primary_name),
+        lower(v_query)
+    ) > 0
+    ORDER BY p.nconst;
+END;
+$$;
