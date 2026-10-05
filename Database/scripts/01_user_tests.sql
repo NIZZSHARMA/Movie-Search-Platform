@@ -1220,3 +1220,149 @@ END;
 $$;
 
 ROLLBACK;
+--------
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_ids TEXT[];
+    v_count BIGINT;
+    v_title TEXT := 'portfolio_structured_test_title';
+BEGIN
+    v_user_id := framework.create_user(
+        'portfolio_structured_test',
+        'portfolio_structured_test@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    INSERT INTO movie.title (tconst, primary_title)
+    VALUES
+        (v_title, 'Adventure StructTitleMarkerXYZ'),
+        ('portfolio_structured_other_title',
+         'Adventure StructTitleMarkerXYZ');
+
+    INSERT INTO movie.omdb_extra (tconst, plot)
+    VALUES (
+        v_title,
+        'A story about StructPlotMarkerXYZ in space.'
+    );
+
+    INSERT INTO movie.person (nconst, primary_name)
+    VALUES
+        ('portfolio_structured_person_a',
+         'Actor StructPersonMarkerXYZ'),
+        ('portfolio_structured_person_b',
+         'Actor StructPersonMarkerXYZ Two');
+
+    INSERT INTO movie.credit (
+        tconst, ordering, nconst, category
+    )
+    VALUES
+        (v_title, 1, 'portfolio_structured_person_a', 'actor'),
+        (v_title, 2, 'portfolio_structured_person_b', 'actor');
+
+    INSERT INTO movie.credit_character (
+        tconst, ordering, character_name
+    )
+    VALUES
+        (v_title, 1, 'Captain StructCharacterMarkerXYZ'),
+        (v_title, 2, 'Doctor StructCharacterMarkerXYZ');
+
+    -- All four fields: mixed case, spaces and substrings
+    SELECT array_agg(s.tconst ORDER BY s.tconst)
+    INTO v_ids
+    FROM movie.structured_string_search(
+        v_user_id,
+        '  STRUCTTITLEMARKERXYZ  ',
+        'structplotmarkerxyz',
+        'STRUCTCHARACTERMARKERXYZ',
+        'structpersonmarkerxyz'
+    ) AS s;
+
+    IF v_ids IS DISTINCT FROM ARRAY[v_title] THEN
+        RAISE EXCEPTION
+            'FAIL: Expected exactly one matching title, got %',
+            v_ids;
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Four fields matched with case-insensitive substrings';
+    RAISE NOTICE
+        'PASS: Multiple matching credits produced no duplicate titles';
+
+    -- Only title supplied: other fields ignored
+    SELECT array_agg(s.tconst ORDER BY s.tconst)
+    INTO v_ids
+    FROM movie.structured_string_search(
+        v_user_id,
+        'StructTitleMarkerXYZ',
+        NULL,
+        '',
+        '   '
+    ) AS s;
+
+    IF v_ids IS DISTINCT FROM ARRAY[
+        'portfolio_structured_other_title',
+        v_title
+    ] THEN
+        RAISE EXCEPTION
+            'FAIL: Optional fields were not ignored correctly: %',
+            v_ids;
+    END IF;
+
+    RAISE NOTICE
+        'PASS: NULL and blank fields ignored correctly';
+
+    -- A mismatching supplied field must exclude the title
+    SELECT COUNT(*) INTO v_count
+    FROM movie.structured_string_search(
+        v_user_id,
+        'StructTitleMarkerXYZ',
+        'StructPlotNoMatchXYZ',
+        'StructCharacterMarkerXYZ',
+        'StructPersonMarkerXYZ'
+    );
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION
+            'FAIL: Search returned a title despite plot mismatch';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: All supplied fields must match';
+
+    IF (
+        SELECT COUNT(*)
+        FROM framework.user_search_history
+        WHERE user_id = v_user_id
+    ) <> 3 THEN
+        RAISE EXCEPTION
+            'FAIL: Expected three search history entries';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM framework.user_search_history
+        WHERE user_id = v_user_id
+          AND query_text::JSONB @> jsonb_build_object(
+              'search_type', 'structured',
+              'title', 'STRUCTTITLEMARKERXYZ',
+              'plot', 'structplotmarkerxyz',
+              'character', 'STRUCTCHARACTERMARKERXYZ',
+              'person_name', 'structpersonmarkerxyz'
+          )
+          AND performed_at IS NOT NULL
+    ) THEN
+        RAISE EXCEPTION
+            'FAIL: Search fields or timestamp missing from history';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Search fields and timestamp saved in history';
+    RAISE NOTICE
+        'PASS: No-result search also saved in history';
+END;
+$$;
+
+ROLLBACK;

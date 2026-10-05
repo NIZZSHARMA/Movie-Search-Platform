@@ -289,3 +289,100 @@ END;
 $$;
 
 COMMIT;
+----------
+CREATE OR REPLACE FUNCTION movie.structured_string_search(
+    p_user_id BIGINT,
+    p_title TEXT,
+    p_plot TEXT,
+    p_character TEXT,
+    p_person_name TEXT
+)
+RETURNS TABLE (
+    tconst TEXT,
+    primary_title TEXT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_title TEXT;
+    v_plot TEXT;
+    v_character TEXT;
+    v_person_name TEXT;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    v_title := NULLIF(btrim(p_title), '');
+    v_plot := NULLIF(btrim(p_plot), '');
+    v_character := NULLIF(btrim(p_character), '');
+    v_person_name := NULLIF(btrim(p_person_name), '');
+
+    IF v_title IS NULL
+       AND v_plot IS NULL
+       AND v_character IS NULL
+       AND v_person_name IS NULL THEN
+        RAISE EXCEPTION
+            'At least one search field is required';
+    END IF;
+
+    INSERT INTO framework.user_search_history (
+        user_id, query_text
+    )
+    VALUES (
+        p_user_id,
+        jsonb_build_object(
+            'search_type', 'structured',
+            'title', v_title,
+            'plot', v_plot,
+            'character', v_character,
+            'person_name', v_person_name
+        )::TEXT
+    );
+
+    RETURN QUERY
+    SELECT t.tconst, t.primary_title
+    FROM movie.title AS t
+    WHERE (
+        v_title IS NULL
+        OR strpos(lower(t.primary_title), lower(v_title)) > 0
+        OR strpos(lower(t.original_title), lower(v_title)) > 0
+    )
+    AND (
+        v_plot IS NULL
+        OR EXISTS (
+            SELECT 1
+            FROM movie.omdb_extra AS o
+            WHERE o.tconst = t.tconst
+              AND strpos(lower(o.plot), lower(v_plot)) > 0
+        )
+    )
+    AND (
+        v_character IS NULL
+        OR EXISTS (
+            SELECT 1
+            FROM movie.credit_character AS ch
+            WHERE ch.tconst = t.tconst
+              AND strpos(
+                  lower(ch.character_name),
+                  lower(v_character)
+              ) > 0
+        )
+    )
+    AND (
+        v_person_name IS NULL
+        OR EXISTS (
+            SELECT 1
+            FROM movie.credit AS c
+            JOIN movie.person AS p
+                ON p.nconst = c.nconst
+            WHERE c.tconst = t.tconst
+              AND strpos(
+                  lower(p.primary_name),
+                  lower(v_person_name)
+              ) > 0
+        )
+    )
+    ORDER BY t.tconst;
+END;
+$$;
