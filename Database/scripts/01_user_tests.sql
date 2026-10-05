@@ -1366,3 +1366,100 @@ END;
 $$;
 
 ROLLBACK;
+------------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_missing_user_id BIGINT;
+    v_case RECORD;
+BEGIN
+    v_user_id := framework.create_user(
+        'portfolio_structured_validation',
+        'portfolio_structured_validation@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    FOR v_case IN
+        SELECT *
+        FROM (VALUES
+            (NULL::BIGINT, 'test'::TEXT, NULL::TEXT,
+             NULL::TEXT, NULL::TEXT,
+             'User ID is required'::TEXT),
+
+            (v_user_id, NULL, NULL, NULL, NULL,
+             'At least one search field is required'),
+
+            (v_user_id, '', '', '', '',
+             'At least one search field is required'),
+
+            (v_user_id, '   ', '   ', '   ', '   ',
+             'At least one search field is required'),
+
+            (v_user_id, NULL, '', '   ', NULL,
+             'At least one search field is required')
+        ) AS cases(
+            user_id, title_text, plot_text,
+            character_text, person_text, expected_error
+        )
+    LOOP
+        BEGIN
+            PERFORM *
+            FROM movie.structured_string_search(
+                v_case.user_id,
+                v_case.title_text,
+                v_case.plot_text,
+                v_case.character_text,
+                v_case.person_text
+            );
+
+            RAISE EXCEPTION 'FAIL: Expected error: %',
+                v_case.expected_error;
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   v_case.expected_error THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: %', v_case.expected_error;
+        END;
+    END LOOP;
+
+    v_missing_user_id := framework.create_user(
+        'portfolio_structured_missing_user',
+        'portfolio_structured_missing@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    DELETE FROM framework.app_user
+    WHERE user_id = v_missing_user_id;
+
+    BEGIN
+        PERFORM *
+        FROM movie.structured_string_search(
+            v_missing_user_id, 'test', NULL, NULL, NULL
+        );
+
+        RAISE EXCEPTION 'FAIL: Missing user was accepted';
+    EXCEPTION
+        WHEN foreign_key_violation THEN
+            RAISE NOTICE 'PASS: Missing user was rejected';
+    END;
+
+    IF EXISTS (
+        SELECT 1
+        FROM framework.user_search_history
+        WHERE user_id IN (v_user_id, v_missing_user_id)
+    ) THEN
+        RAISE EXCEPTION
+            'FAIL: Invalid search created history';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Invalid searches did not create history';
+END;
+$$;
+
+ROLLBACK;
