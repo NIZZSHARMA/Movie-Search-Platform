@@ -2141,3 +2141,141 @@ END;
 $$;
 
 ROLLBACK;
+--------------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_ids TEXT[];
+    v_count BIGINT;
+    v_keywords TEXT[];
+    v_case INTEGER;
+BEGIN
+    INSERT INTO movie.title (tconst, primary_title)
+    VALUES
+        ('test_em_title_a', 'Both Keywords'),
+        ('test_em_title_b', 'Only Alpha'),
+        ('test_em_title_c', 'Only Beta');
+
+    INSERT INTO movie.word (word)
+    VALUES ('test_em_alpha'), ('test_em_beta')
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO movie.wi (tconst, word)
+    VALUES
+        ('test_em_title_a', 'test_em_alpha'),
+        ('test_em_title_a', 'test_em_beta'),
+        ('test_em_title_b', 'test_em_alpha'),
+        ('test_em_title_c', 'test_em_beta');
+
+    SELECT array_agg(s.tconst ORDER BY s.tconst)
+    INTO v_ids
+    FROM movie.exact_match(
+        ARRAY['test_em_alpha', 'test_em_beta']
+    ) AS s;
+
+    IF v_ids IS DISTINCT FROM ARRAY['test_em_title_a']::TEXT[] THEN
+        RAISE EXCEPTION 'FAIL: All-keyword match incorrect: %', v_ids;
+    END IF;
+
+    RAISE NOTICE 'PASS: Only the title containing both keywords returned';
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM movie.exact_match(
+            ARRAY['test_em_alpha', 'test_em_beta']
+        ) AS s
+        WHERE s.tconst = 'test_em_title_a'
+          AND s.primary_title = 'Both Keywords'
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Returned title name is incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Correct title ID and name returned';
+
+    SELECT array_agg(s.tconst ORDER BY s.tconst)
+    INTO v_ids
+    FROM movie.exact_match(
+        ARRAY['  TEST_EM_ALPHA  ', 'test_em_beta', 'test_em_alpha']
+    ) AS s;
+
+    IF v_ids IS DISTINCT FROM ARRAY['test_em_title_a']::TEXT[] THEN
+        RAISE EXCEPTION 'FAIL: Keyword normalization incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Case, spaces and duplicate keywords handled';
+
+    SELECT array_agg(s.tconst ORDER BY s.tconst)
+    INTO v_ids
+    FROM movie.exact_match(ARRAY['test_em_alpha']) AS s;
+
+    IF v_ids IS DISTINCT FROM
+       ARRAY['test_em_title_a', 'test_em_title_b']::TEXT[] THEN
+        RAISE EXCEPTION 'FAIL: Single-keyword search incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Single keyword returns both matching titles';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.exact_match(ARRAY['test_em_alph']);
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION 'FAIL: Partial keyword matched a whole word';
+    END IF;
+
+    RAISE NOTICE 'PASS: Partial keyword does not match a whole word';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.exact_match(
+        ARRAY['test_em_alpha', 'test_em_beta', 'test_em_alph']
+    );
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION 'FAIL: Query with unmatched keyword returned titles';
+    END IF;
+
+    RAISE NOTICE 'PASS: An unmatched keyword makes the result empty';
+
+    FOR v_case IN 1..2 LOOP
+        v_keywords := CASE v_case
+            WHEN 1 THEN NULL::TEXT[]
+            ELSE ARRAY[]::TEXT[]
+        END;
+
+        BEGIN
+            PERFORM * FROM movie.exact_match(v_keywords);
+            RAISE EXCEPTION 'FAIL: NULL or empty keyword array accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'At least one keyword is required' THEN
+                    RAISE;
+                END IF;
+                RAISE NOTICE 'PASS: NULL or empty keyword array rejected';
+        END;
+    END LOOP;
+
+    FOR v_case IN 1..4 LOOP
+        v_keywords := CASE v_case
+            WHEN 1 THEN ARRAY[NULL::TEXT]
+            WHEN 2 THEN ARRAY['']
+            WHEN 3 THEN ARRAY['   ']
+            ELSE ARRAY['test_em_alpha', NULL::TEXT]
+        END;
+
+        BEGIN
+            PERFORM * FROM movie.exact_match(v_keywords);
+            RAISE EXCEPTION 'FAIL: NULL or blank keyword accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'Keywords must not be NULL or blank' THEN
+                    RAISE;
+                END IF;
+                RAISE NOTICE 'PASS: NULL or blank keyword rejected';
+        END;
+    END LOOP;
+END;
+$$;
+
+ROLLBACK;
