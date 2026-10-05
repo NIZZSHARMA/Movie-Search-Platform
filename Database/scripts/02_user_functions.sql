@@ -526,3 +526,57 @@ COMMIT;
 ---
 -- Populate actor ratings after creating the materialized view
 SELECT movie.refresh_person_ratings();
+------------
+CREATE OR REPLACE FUNCTION movie.popular_actors(
+    p_tconst TEXT
+)
+RETURNS TABLE (
+    nconst TEXT,
+    primary_name TEXT,
+    weighted_rating NUMERIC,
+    total_votes NUMERIC,
+    rated_title_count BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tconst TEXT;
+BEGIN
+    IF p_tconst IS NULL OR btrim(p_tconst) = '' THEN
+        RAISE EXCEPTION 'Title ID is required';
+    END IF;
+
+    v_tconst := btrim(p_tconst);
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM movie.title AS t
+        WHERE t.tconst = v_tconst
+    ) THEN
+        RAISE EXCEPTION 'Title not found: %', v_tconst;
+    END IF;
+
+    RETURN QUERY
+    WITH cast_members AS (
+        SELECT DISTINCT c.nconst
+        FROM movie.credit AS c
+        WHERE c.tconst = v_tconst
+          AND c.category IN ('actor', 'actress')
+    )
+    SELECT
+        p.nconst,
+        p.primary_name,
+        r.weighted_rating,
+        r.total_votes,
+        r.rated_title_count
+    FROM cast_members AS c
+    JOIN movie.person AS p
+        ON p.nconst = c.nconst
+    LEFT JOIN movie.person_rating AS r
+        ON r.nconst = p.nconst
+    ORDER BY
+        r.weighted_rating DESC NULLS LAST,
+        r.total_votes DESC NULLS LAST,
+        p.nconst;
+END;
+$$;

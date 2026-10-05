@@ -1679,3 +1679,135 @@ SELECT
            OR rated_title_count <= 0
     ) AS invalid_rows
 FROM movie.person_rating;
+------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_ids TEXT[];
+    v_input TEXT;
+    v_count BIGINT;
+    v_missing TEXT := 'test_popular_missing_title';
+BEGIN
+    INSERT INTO movie.person (nconst, primary_name)
+    VALUES
+        ('test_pop_actor_a', 'Test Actor A'),
+        ('test_pop_actor_b', 'Test Actress B'),
+        ('test_pop_actor_unrated', 'Test Unrated Actor'),
+        ('test_pop_director', 'Test Director');
+
+    INSERT INTO movie.title (
+        tconst, primary_title,
+        base_average_rating, base_num_votes
+    )
+    VALUES
+        ('test_pop_cast_title', 'Test Cast Movie', NULL, NULL),
+        ('test_pop_rating_a', 'Actor A Movie', 7, 100),
+        ('test_pop_rating_b', 'Actress B Movie', 9, 200),
+        ('test_pop_empty_title', 'Movie Without Cast', NULL, NULL);
+
+    INSERT INTO movie.credit (
+        tconst, ordering, nconst, category
+    )
+    VALUES
+        ('test_pop_cast_title', 1, 'test_pop_actor_a', 'actor'),
+        ('test_pop_cast_title', 2, 'test_pop_actor_b', 'actress'),
+        ('test_pop_cast_title', 3, 'test_pop_actor_unrated', 'actor'),
+        ('test_pop_cast_title', 4, 'test_pop_director', 'director'),
+        ('test_pop_cast_title', 5, 'test_pop_actor_a', 'actor'),
+        ('test_pop_rating_a', 1, 'test_pop_actor_a', 'actor'),
+        ('test_pop_rating_b', 1, 'test_pop_actor_b', 'actress');
+
+    PERFORM movie.refresh_person_ratings();
+
+    SELECT array_agg(s.nconst ORDER BY s.position)
+    INTO v_ids
+    FROM movie.popular_actors(
+        '  test_pop_cast_title  '
+    ) WITH ORDINALITY AS s(
+        nconst, primary_name, weighted_rating,
+        total_votes, rated_title_count, position
+    );
+
+    IF v_ids IS DISTINCT FROM ARRAY[
+        'test_pop_actor_b',
+        'test_pop_actor_a',
+        'test_pop_actor_unrated'
+    ]::TEXT[] THEN
+        RAISE EXCEPTION
+            'FAIL: Incorrect actors or popularity order: %',
+            v_ids;
+    END IF;
+
+    RAISE NOTICE 'PASS: Actors ordered by decreasing rating';
+    RAISE NOTICE 'PASS: Unrated actor appears last';
+    RAISE NOTICE 'PASS: Duplicate actor and director excluded';
+    RAISE NOTICE 'PASS: Title ID spaces trimmed';
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM movie.popular_actors('test_pop_cast_title') AS s
+        WHERE s.nconst = 'test_pop_actor_b'
+          AND s.primary_name = 'Test Actress B'
+          AND s.weighted_rating = 9
+          AND s.total_votes = 200
+          AND s.rated_title_count = 1
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Actor rating details are incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Actor name and rating details correct';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.popular_actors('test_pop_empty_title');
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION 'FAIL: Movie without cast returned actors';
+    END IF;
+
+    RAISE NOTICE 'PASS: Movie without cast returns zero rows';
+
+    FOREACH v_input IN ARRAY ARRAY[NULL::TEXT, '', '   ']
+    LOOP
+        BEGIN
+            PERFORM *
+            FROM movie.popular_actors(v_input);
+
+            RAISE EXCEPTION 'FAIL: Invalid title ID accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'Title ID is required' THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: NULL or blank title ID rejected';
+        END;
+    END LOOP;
+
+    WHILE EXISTS (
+        SELECT 1
+        FROM movie.title
+        WHERE tconst = v_missing
+    ) LOOP
+        v_missing := v_missing || '_x';
+    END LOOP;
+
+    BEGIN
+        PERFORM *
+        FROM movie.popular_actors(v_missing);
+
+        RAISE EXCEPTION 'FAIL: Missing title accepted';
+    EXCEPTION
+        WHEN raise_exception THEN
+            IF SQLERRM IS DISTINCT FROM
+               format('Title not found: %s', v_missing) THEN
+                RAISE;
+            END IF;
+
+            RAISE NOTICE 'PASS: Missing title rejected';
+    END;
+END;
+$$;
+
+ROLLBACK;
