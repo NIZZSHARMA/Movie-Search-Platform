@@ -2613,3 +2613,112 @@ END;
 $$;
 
 ROLLBACK;
+----------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_by_name JSONB;
+    v_by_id JSONB;
+BEGIN
+    INSERT INTO movie.person (nconst, primary_name)
+    VALUES
+        ('portfolio_cp_name_main', 'Portfolio Unique Name Actor'),
+        ('portfolio_cp_name_other', 'Portfolio Coplayer Actor');
+
+    INSERT INTO movie.title (tconst, primary_title)
+    VALUES (
+        'portfolio_cp_name_title',
+        'Temporary coplayer name test'
+    );
+
+    INSERT INTO movie.credit (
+        tconst, ordering, nconst, category
+    )
+    VALUES
+        (
+            'portfolio_cp_name_title', 1,
+            'portfolio_cp_name_main', 'actor'
+        ),
+        (
+            'portfolio_cp_name_title', 2,
+            'portfolio_cp_name_other', 'actor'
+        );
+
+    -- Search by name, with different case and extra spaces
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', c.nconst,
+            'name', c.primary_name,
+            'count', c.shared_title_count
+        )
+        ORDER BY c.nconst
+    )
+    INTO v_by_name
+    FROM movie.find_coplayers(
+        '  PORTFOLIO UNIQUE NAME ACTOR  '
+    ) AS c;
+
+    IF v_by_name IS DISTINCT FROM
+       '[{
+          "id":"portfolio_cp_name_other",
+          "name":"Portfolio Coplayer Actor",
+          "count":1
+        }]'::JSONB THEN
+        RAISE EXCEPTION
+            'FAIL: Name search returned incorrect results: %',
+            v_by_name;
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Actor name accepted, case ignored and spaces trimmed';
+
+    -- The existing ID search must still work
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', c.nconst,
+            'name', c.primary_name,
+            'count', c.shared_title_count
+        )
+        ORDER BY c.nconst
+    )
+    INTO v_by_id
+    FROM movie.find_coplayers(
+        'portfolio_cp_name_main'
+    ) AS c;
+
+    IF v_by_id IS DISTINCT FROM v_by_name THEN
+        RAISE EXCEPTION
+            'FAIL: Name and ID searches returned different results';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Name and ID searches returned the same coplayer';
+
+    -- Duplicate names must produce a clear error
+    INSERT INTO movie.person (nconst, primary_name)
+    VALUES (
+        'portfolio_cp_name_duplicate',
+        'Portfolio Unique Name Actor'
+    );
+
+    BEGIN
+        PERFORM *
+        FROM movie.find_coplayers('Portfolio Unique Name Actor');
+
+        RAISE EXCEPTION
+            'FAIL: Ambiguous actor name was accepted';
+    EXCEPTION
+        WHEN raise_exception THEN
+            IF SQLERRM IS DISTINCT FROM
+               'Multiple persons have this name: Portfolio Unique Name Actor. Use a person ID.' THEN
+                RAISE;
+            END IF;
+
+            RAISE NOTICE
+                'PASS: Duplicate actor names rejected with a clear message';
+    END;
+END;
+$$;
+
+ROLLBACK;
