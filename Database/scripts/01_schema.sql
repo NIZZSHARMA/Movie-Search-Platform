@@ -8,7 +8,7 @@
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
+
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -22,7 +22,7 @@ SET row_security = off;
 CREATE SCHEMA framework;
 
 
-ALTER SCHEMA framework OWNER TO postgres;
+
 
 -- movie; Type: SCHEMA; Schema: -; Owner: postgres
 --
@@ -30,7 +30,7 @@ ALTER SCHEMA framework OWNER TO postgres;
 CREATE SCHEMA movie;
 
 
-ALTER SCHEMA movie OWNER TO postgres;
+
 
 SET default_tablespace = '';
 
@@ -46,7 +46,7 @@ CREATE TABLE framework.app_user (
 );
 
 
-ALTER TABLE framework.app_user OWNER TO postgres;
+
 
 -- app_user_user_id_seq; Type: SEQUENCE; Schema: framework; Owner: postgres
 
@@ -71,7 +71,7 @@ CREATE TABLE framework.title_rating_history (
 );
 
 
-ALTER TABLE framework.title_rating_history OWNER TO postgres;
+
 
 -- title_rating_history_event_id_seq; Type: SEQUENCE; Schema: framework; Owner: postgres
 
@@ -94,7 +94,7 @@ CREATE TABLE framework.user_bookmark_person (
 );
 
 
-ALTER TABLE framework.user_bookmark_person OWNER TO postgres;
+
 
 -- user_bookmark_title; Type: TABLE; Schema: framework; Owner: postgres
 
@@ -104,7 +104,7 @@ CREATE TABLE framework.user_bookmark_title (
 );
 
 
-ALTER TABLE framework.user_bookmark_title OWNER TO postgres;
+
 
 -- user_search_history; Type: TABLE; Schema: framework; Owner: postgres
 
@@ -116,7 +116,7 @@ CREATE TABLE framework.user_search_history (
 );
 
 
-ALTER TABLE framework.user_search_history OWNER TO postgres;
+
 
 -- user_search_history_search_id_seq; Type: SEQUENCE; Schema: framework; Owner: postgres
 
@@ -140,7 +140,7 @@ CREATE TABLE framework.user_title_rating (
 );
 
 
-ALTER TABLE framework.user_title_rating OWNER TO postgres;
+
 
 -- user_title_rating_rating_id_seq; Type: SEQUENCE; Schema: framework; Owner: postgres
 
@@ -166,7 +166,7 @@ CREATE TABLE movie.credit (
 );
 
 
-ALTER TABLE movie.credit OWNER TO postgres;
+
 
 -- credit_character; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -178,7 +178,7 @@ CREATE TABLE movie.credit_character (
 );
 
 
-ALTER TABLE movie.credit_character OWNER TO postgres;
+
 
 -- genre; Type: TABLE; Schema: movie; Owner: postgres
 --
@@ -188,7 +188,7 @@ CREATE TABLE movie.genre (
 );
 
 
-ALTER TABLE movie.genre OWNER TO postgres;
+
 
 -- omdb_extra; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -199,7 +199,7 @@ CREATE TABLE movie.omdb_extra (
 );
 
 
-ALTER TABLE movie.omdb_extra OWNER TO postgres;
+
 
 -- person; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -211,7 +211,7 @@ CREATE TABLE movie.person (
 );
 
 
-ALTER TABLE movie.person OWNER TO postgres;
+
 
 -- person_known_for; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -221,7 +221,7 @@ CREATE TABLE movie.person_known_for (
 );
 
 
-ALTER TABLE movie.person_known_for OWNER TO postgres;
+
 
 -- person_profession; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -231,7 +231,7 @@ CREATE TABLE movie.person_profession (
 );
 
 
-ALTER TABLE movie.person_profession OWNER TO postgres;
+
 
 -- profession; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -240,7 +240,7 @@ CREATE TABLE movie.profession (
 );
 
 
-ALTER TABLE movie.profession OWNER TO postgres;
+
 
 -- title; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -258,7 +258,7 @@ CREATE TABLE movie.title (
 );
 
 
-ALTER TABLE movie.title OWNER TO postgres;
+
 
 -- title_aka; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -272,7 +272,7 @@ CREATE TABLE movie.title_aka (
 );
 
 
-ALTER TABLE movie.title_aka OWNER TO postgres;
+
 
 -- title_aka_attribute; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -283,7 +283,7 @@ CREATE TABLE movie.title_aka_attribute (
 );
 
 
-ALTER TABLE movie.title_aka_attribute OWNER TO postgres;
+
 
 -- title_aka_type; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -294,7 +294,7 @@ CREATE TABLE movie.title_aka_type (
 );
 
 
-ALTER TABLE movie.title_aka_type OWNER TO postgres;
+
 
 -- title_crew_member; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -306,7 +306,7 @@ CREATE TABLE movie.title_crew_member (
 );
 
 
-ALTER TABLE movie.title_crew_member OWNER TO postgres;
+
 
 -- title_episode; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -318,7 +318,7 @@ CREATE TABLE movie.title_episode (
 );
 
 
-ALTER TABLE movie.title_episode OWNER TO postgres;
+
 
 -- title_genre; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -328,7 +328,7 @@ CREATE TABLE movie.title_genre (
 );
 
 
-ALTER TABLE movie.title_genre OWNER TO postgres;
+
 
 -- wi; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -338,7 +338,7 @@ CREATE TABLE movie.wi (
 );
 
 
-ALTER TABLE movie.wi OWNER TO postgres;
+
 
 -- word; Type: TABLE; Schema: movie; Owner: postgres
 
@@ -347,7 +347,7 @@ CREATE TABLE movie.word (
 );
 
 
-ALTER TABLE movie.word OWNER TO postgres;
+
 
 -- app_user app_user_email_key; Type: CONSTRAINT; Schema: framework; Owner: postgres
 
