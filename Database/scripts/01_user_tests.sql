@@ -1983,3 +1983,161 @@ END;
 $$;
 
 ROLLBACK;
+---------------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_result JSONB;
+    v_count BIGINT;
+    v_input TEXT;
+    v_limit INTEGER;
+BEGIN
+    INSERT INTO movie.person (nconst, primary_name)
+    VALUES
+        ('test_pw_person_a', 'Portfolio Word Test Person'),
+        ('test_pw_person_b', 'Portfolio Word Test Person'),
+        ('test_pw_no_credits', 'Portfolio Person Without Titles');
+
+    INSERT INTO movie.title (tconst, primary_title)
+    VALUES
+        ('test_pw_title_a', 'Word Test A'),
+        ('test_pw_title_b', 'Word Test B'),
+        ('test_pw_title_c', 'Word Test C');
+
+    INSERT INTO movie.credit (
+        tconst, ordering, nconst, category
+    )
+    VALUES
+        ('test_pw_title_a', 1, 'test_pw_person_a', 'actor'),
+        ('test_pw_title_a', 2, 'test_pw_person_a', 'actor'),
+        ('test_pw_title_c', 1, 'test_pw_person_b', 'actress');
+
+    INSERT INTO movie.title_crew_member (
+        tconst, nconst, role
+    )
+    VALUES
+        ('test_pw_title_a', 'test_pw_person_a', 'writer'),
+        ('test_pw_title_b', 'test_pw_person_a', 'director');
+
+    INSERT INTO movie.word (word)
+    VALUES
+        ('test_pw_alpha'),
+        ('test_pw_beta'),
+        ('test_pw_gamma')
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO movie.wi (tconst, word)
+    VALUES
+        ('test_pw_title_a', 'test_pw_alpha'),
+        ('test_pw_title_a', 'test_pw_beta'),
+        ('test_pw_title_b', 'test_pw_alpha'),
+        ('test_pw_title_b', 'test_pw_gamma'),
+        ('test_pw_title_c', 'test_pw_alpha');
+
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'word', s.word,
+            'frequency', s.frequency
+        )
+        ORDER BY s.position
+    )
+    INTO v_result
+    FROM movie.person_words(
+        '  PORTFOLIO WORD TEST PERSON  '
+    ) WITH ORDINALITY AS s(word, frequency, position);
+
+    IF v_result IS DISTINCT FROM
+       '[{"word":"test_pw_alpha","frequency":3},
+         {"word":"test_pw_beta","frequency":1},
+         {"word":"test_pw_gamma","frequency":1}]'::JSONB THEN
+        RAISE EXCEPTION
+            'FAIL: Incorrect words, frequencies or order: %',
+            v_result;
+    END IF;
+
+    RAISE NOTICE 'PASS: Correct words and title frequencies';
+    RAISE NOTICE 'PASS: Duplicate credits and crew links counted once';
+    RAISE NOTICE 'PASS: Crew-only title included';
+    RAISE NOTICE 'PASS: Same-name persons combined';
+    RAISE NOTICE 'PASS: Name case and spaces handled';
+    RAISE NOTICE 'PASS: Frequency order and alphabetical ties correct';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.person_words('Portfolio Word Test Person', 1) AS s
+    WHERE s.word = 'test_pw_alpha'
+      AND s.frequency = 3;
+
+    IF v_count <> 1
+       OR (
+           SELECT COUNT(*)
+           FROM movie.person_words(
+               'Portfolio Word Test Person', 1
+           )
+       ) <> 1 THEN
+        RAISE EXCEPTION 'FAIL: Word limit is incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Limit returns the most frequent word';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.person_words('Portfolio Person Without Titles');
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION
+            'FAIL: Person without titles returned words';
+    END IF;
+
+    RAISE NOTICE 'PASS: Person without titles returns zero rows';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.person_words('Portfolio Word Test');
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION
+            'FAIL: Partial name should not match the full name';
+    END IF;
+
+    RAISE NOTICE 'PASS: Unmatched partial name returns zero rows';
+
+    FOREACH v_input IN ARRAY ARRAY[NULL::TEXT, '', '   ']
+    LOOP
+        BEGIN
+            PERFORM *
+            FROM movie.person_words(v_input);
+
+            RAISE EXCEPTION 'FAIL: Invalid person name accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'Person name is required' THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: NULL or blank name rejected';
+        END;
+    END LOOP;
+
+    FOREACH v_limit IN ARRAY ARRAY[NULL::INTEGER, 0, -1]
+    LOOP
+        BEGIN
+            PERFORM *
+            FROM movie.person_words(
+                'Portfolio Word Test Person', v_limit
+            );
+
+            RAISE EXCEPTION 'FAIL: Invalid limit accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'Limit must be a positive integer' THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: Invalid limit rejected';
+        END;
+    END LOOP;
+END;
+$$;
+
+ROLLBACK;

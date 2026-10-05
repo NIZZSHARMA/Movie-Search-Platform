@@ -667,3 +667,60 @@ BEGIN
     LIMIT p_limit;
 END;
 $$;
+-----------
+CREATE OR REPLACE FUNCTION movie.person_words(
+    p_person_name TEXT,
+    p_limit INTEGER DEFAULT 10
+)
+RETURNS TABLE (
+    word TEXT,
+    frequency BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_person_name TEXT;
+BEGIN
+    IF p_person_name IS NULL
+       OR btrim(p_person_name) = '' THEN
+        RAISE EXCEPTION 'Person name is required';
+    END IF;
+
+    IF p_limit IS NULL OR p_limit < 1 THEN
+        RAISE EXCEPTION 'Limit must be a positive integer';
+    END IF;
+
+    v_person_name := btrim(p_person_name);
+
+    RETURN QUERY
+    WITH matching_persons AS (
+        SELECT p.nconst
+        FROM movie.person AS p
+        WHERE lower(p.primary_name) = lower(v_person_name)
+    ),
+    person_titles AS (
+        SELECT c.tconst
+        FROM movie.credit AS c
+        JOIN matching_persons AS p
+            ON p.nconst = c.nconst
+
+        UNION
+
+        SELECT c.tconst
+        FROM movie.title_crew_member AS c
+        JOIN matching_persons AS p
+            ON p.nconst = c.nconst
+    )
+    SELECT
+        w.word,
+        COUNT(*) AS frequency
+    FROM person_titles AS t
+    JOIN movie.wi AS w
+        ON w.tconst = t.tconst
+    GROUP BY w.word
+    ORDER BY
+        COUNT(*) DESC,
+        w.word COLLATE "C"
+    LIMIT p_limit;
+END;
+$$;
