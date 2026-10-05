@@ -910,3 +910,144 @@ END;
 $$;
 
 ROLLBACK;
+---------
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_a BIGINT;
+    v_user_b BIGINT;
+    v_average NUMERIC;
+    v_votes BIGINT;
+    v_title TEXT := 'portfolio_rating_test_title';
+BEGIN
+    -- Create temporary test users
+    v_user_a := framework.create_user(
+        'portfolio_rating_user_a',
+        'portfolio_rating_a@example.com',
+        'TEST_HASH_A'
+    );
+
+    v_user_b := framework.create_user(
+        'portfolio_rating_user_b',
+        'portfolio_rating_b@example.com',
+        'TEST_HASH_B'
+    );
+
+    -- IMDb baseline: average 8 from 2 votes
+    INSERT INTO movie.title (
+        tconst, primary_title,
+        base_average_rating, base_num_votes
+    )
+    VALUES (
+        v_title, 'Temporary rating test', 8, 2
+    );
+
+    -- First user rates 10: (16 + 10) / 3
+    v_average := movie.rate(
+        v_user_a, '  ' || v_title || '  ', 10
+    );
+
+    SELECT num_votes INTO v_votes
+    FROM movie.title_rating
+    WHERE tconst = v_title;
+
+    IF v_average IS NULL
+       OR abs(v_average - 26::NUMERIC / 3) > 0.000001
+       OR v_votes IS DISTINCT FROM 3::BIGINT THEN
+        RAISE EXCEPTION
+            'FAIL: First rating average or vote count is incorrect';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: First rating updated average and vote count';
+
+    -- Same user changes rating to 4: (16 + 4) / 3
+    v_average := movie.rate(v_user_a, v_title, 4);
+
+    SELECT num_votes INTO v_votes
+    FROM movie.title_rating
+    WHERE tconst = v_title;
+
+    IF v_average IS NULL
+       OR abs(v_average - 20::NUMERIC / 3) > 0.000001
+       OR v_votes IS DISTINCT FROM 3::BIGINT
+       OR (
+           SELECT COUNT(*)
+           FROM framework.user_title_rating
+           WHERE user_id = v_user_a
+             AND tconst = v_title
+             AND rating = 4
+       ) <> 1 THEN
+        RAISE EXCEPTION
+            'FAIL: Re-rating did not correctly replace the previous vote';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Re-rating replaced the rating without increasing votes';
+
+    -- Second user rates 8: (16 + 4 + 8) / 4 = 7
+    v_average := movie.rate(v_user_b, v_title, 8);
+
+    SELECT average_rating, num_votes
+    INTO v_average, v_votes
+    FROM movie.title_rating
+    WHERE tconst = v_title;
+
+    IF v_average IS DISTINCT FROM 7::NUMERIC
+       OR v_votes IS DISTINCT FROM 4::BIGINT
+       OR (
+           SELECT COUNT(*)
+           FROM framework.user_title_rating
+           WHERE tconst = v_title
+       ) <> 2 THEN
+        RAISE EXCEPTION
+            'FAIL: Second user rating or combined average is incorrect';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Two users have separate ratings and correct combined average';
+
+    -- All three successful calls must appear in history
+    IF (
+        SELECT COUNT(*)
+        FROM framework.title_rating_history
+        WHERE tconst = v_title
+    ) <> 3
+    OR (
+        SELECT COUNT(*)
+        FROM framework.title_rating_history
+        WHERE tconst = v_title
+          AND user_id = v_user_a
+          AND rating IN (10, 4)
+          AND rated_at IS NOT NULL
+    ) <> 2
+    OR NOT EXISTS (
+        SELECT 1
+        FROM framework.title_rating_history
+        WHERE tconst = v_title
+          AND user_id = v_user_b
+          AND rating = 8
+          AND rated_at IS NOT NULL
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Rating history is incorrect';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: All three rating calls saved in history';
+
+    IF NOT EXISTS (
+        SELECT 1 FROM movie.title
+        WHERE tconst = v_title
+          AND base_average_rating = 8
+          AND base_num_votes = 2
+    ) THEN
+        RAISE EXCEPTION 'FAIL: IMDb baseline was changed';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Original IMDb rating and votes preserved';
+END;
+$$;
+
+ROLLBACK;

@@ -178,4 +178,114 @@ BEGIN
        OR strpos(lower(o.plot), lower(v_query)) > 0
     ORDER BY t.tconst;
 END;
+$$; 
+   -----------------------
+
+BEGIN;
+
+CREATE OR REPLACE VIEW movie.title_rating AS
+SELECT
+    t.tconst,
+    CASE
+        WHEN b.base_votes + u.user_votes > 0 THEN
+            (
+                b.base_total + u.user_total
+            ) / (b.base_votes + u.user_votes)
+        ELSE NULL
+    END AS average_rating,
+    b.base_votes + u.user_votes AS num_votes
+FROM movie.title AS t
+CROSS JOIN LATERAL (
+    SELECT
+        CASE
+            WHEN t.base_average_rating IS NOT NULL
+                 AND t.base_num_votes > 0
+            THEN t.base_num_votes::BIGINT
+            ELSE 0::BIGINT
+        END AS base_votes,
+        CASE
+            WHEN t.base_average_rating IS NOT NULL
+                 AND t.base_num_votes > 0
+            THEN t.base_average_rating
+                 * t.base_num_votes::NUMERIC
+            ELSE 0::NUMERIC
+        END AS base_total
+) AS b
+CROSS JOIN LATERAL (
+    SELECT
+        COUNT(*) AS user_votes,
+        COALESCE(SUM(r.rating), 0)::NUMERIC AS user_total
+    FROM framework.user_title_rating AS r
+    WHERE r.tconst = t.tconst
+) AS u;
+
+CREATE OR REPLACE FUNCTION movie.rate(
+    p_user_id BIGINT,
+    p_tconst TEXT,
+    p_rating INTEGER
+)
+RETURNS NUMERIC
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_tconst TEXT;
+    v_average NUMERIC;
+    v_rated_at TIMESTAMPTZ;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    IF p_tconst IS NULL OR btrim(p_tconst) = '' THEN
+        RAISE EXCEPTION 'Title ID is required';
+    END IF;
+
+    IF p_rating IS NULL
+       OR p_rating < 1
+       OR p_rating > 10 THEN
+        RAISE EXCEPTION
+            'Rating must be an integer between 1 and 10';
+    END IF;
+
+    v_tconst := btrim(p_tconst);
+
+    -- Serialize rating changes for the same title
+    PERFORM 1
+    FROM movie.title AS t
+    WHERE t.tconst = v_tconst
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Title not found: %', v_tconst;
+    END IF;
+
+    v_rated_at := clock_timestamp();
+
+    INSERT INTO framework.user_title_rating (
+        user_id, tconst, rating, rated_at
+    )
+    VALUES (
+        p_user_id, v_tconst, p_rating, v_rated_at
+    )
+    ON CONFLICT (user_id, tconst)
+    DO UPDATE SET
+        rating = EXCLUDED.rating,
+        rated_at = EXCLUDED.rated_at;
+
+    INSERT INTO framework.title_rating_history (
+        user_id, tconst, rating, rated_at
+    )
+    VALUES (
+        p_user_id, v_tconst, p_rating, v_rated_at
+    );
+
+    SELECT r.average_rating
+    INTO v_average
+    FROM movie.title_rating AS r
+    WHERE r.tconst = v_tconst;
+
+    RETURN v_average;
+END;
 $$;
+
+COMMIT;
