@@ -2540,3 +2540,76 @@ END;
 $$;
 
 ROLLBACK;
+----
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_ids TEXT[];
+BEGIN
+    v_user_id := framework.create_user(
+        'portfolio_name_server_test',
+        'portfolio_name_server@example.com',
+        'TEST_HASH_ONLY'
+    );
+
+    INSERT INTO movie.person (nconst, primary_name)
+    VALUES
+        ('portfolio_ns_a', 'NameMarkerXYZ Actor'),
+        ('portfolio_ns_b', 'Another NameMarkerXYZ Person'),
+        ('portfolio_ns_c', 'Unrelated Test Person');
+
+    SELECT array_agg(s.nconst ORDER BY s.nconst)
+    INTO v_ids
+    FROM movie.name_search(
+        v_user_id, '  NAMEMARKERXYZ  '
+    ) AS s;
+
+    IF v_ids IS DISTINCT FROM
+       ARRAY['portfolio_ns_a', 'portfolio_ns_b']::TEXT[] THEN
+        RAISE EXCEPTION
+            'FAIL: Name search results incorrect: %', v_ids;
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Partial name, case and spaces handled correctly';
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM framework.user_search_history
+        WHERE user_id = v_user_id
+          AND query_text::JSONB @> jsonb_build_object(
+              'search_type', 'name',
+              'query', 'NAMEMARKERXYZ'
+          )
+          AND performed_at IS NOT NULL
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Name search history incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Name search and timestamp saved in history';
+
+    IF EXISTS (
+        SELECT 1
+        FROM movie.name_search(
+            v_user_id, 'NameMarkerXYZ_NoMatch'
+        )
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Unmatched name returned results';
+    END IF;
+
+    IF (
+        SELECT COUNT(*)
+        FROM framework.user_search_history
+        WHERE user_id = v_user_id
+    ) <> 2 THEN
+        RAISE EXCEPTION 'FAIL: Expected two search history entries';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: No-result search returned no rows and saved history';
+END;
+$$;
+
+ROLLBACK;
