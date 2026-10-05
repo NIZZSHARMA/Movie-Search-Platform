@@ -1463,3 +1463,130 @@ END;
 $$;
 
 ROLLBACK;
+-------------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_result JSONB;
+    v_count BIGINT;
+    v_input TEXT;
+    v_missing TEXT := 'portfolio_coplayer_missing';
+BEGIN
+    INSERT INTO movie.person (nconst, primary_name)
+    VALUES
+        ('portfolio_cp_main', 'Test Main Actor'),
+        ('portfolio_cp_b', 'Test Actor B'),
+        ('portfolio_cp_c', 'Test Actress C'),
+        ('portfolio_cp_director', 'Test Director'),
+        ('portfolio_cp_alone', 'Test Actor Without Credits');
+
+    INSERT INTO movie.title (tconst, primary_title)
+    VALUES
+        ('portfolio_cp_title_1', 'Coplayer Test One'),
+        ('portfolio_cp_title_2', 'Coplayer Test Two');
+
+    INSERT INTO movie.credit (
+        tconst, ordering, nconst, category
+    )
+    VALUES
+        ('portfolio_cp_title_1', 1, 'portfolio_cp_main', 'actor'),
+        ('portfolio_cp_title_1', 2, 'portfolio_cp_b', 'actor'),
+        ('portfolio_cp_title_1', 3, 'portfolio_cp_c', 'actress'),
+        ('portfolio_cp_title_1', 4, 'portfolio_cp_director', 'director'),
+        ('portfolio_cp_title_1', 5, 'portfolio_cp_b', 'actor'),
+        ('portfolio_cp_title_1', 6, 'portfolio_cp_main', 'actor'),
+        ('portfolio_cp_title_2', 1, 'portfolio_cp_main', 'actor'),
+        ('portfolio_cp_title_2', 2, 'portfolio_cp_b', 'actor');
+
+    -- WITH ORDINALITY checks the function's returned order
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', s.nconst,
+            'name', s.primary_name,
+            'count', s.shared_title_count
+        )
+        ORDER BY s.position
+    )
+    INTO v_result
+    FROM movie.find_coplayers(
+        '  portfolio_cp_main  '
+    ) WITH ORDINALITY AS s(
+        nconst, primary_name, shared_title_count, position
+    );
+
+    IF v_result IS DISTINCT FROM
+       '[{"id":"portfolio_cp_b",
+          "name":"Test Actor B","count":2},
+         {"id":"portfolio_cp_c",
+          "name":"Test Actress C","count":1}]'::JSONB THEN
+        RAISE EXCEPTION
+            'FAIL: Incorrect coplayers, counts or order: %',
+            v_result;
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Correct actors and actresses returned';
+    RAISE NOTICE
+        'PASS: Shared titles counted once despite duplicate credits';
+    RAISE NOTICE
+        'PASS: Main actor and director excluded';
+    RAISE NOTICE
+        'PASS: Results ordered by shared title count and input trimmed';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.find_coplayers('portfolio_cp_alone');
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION
+            'FAIL: Person without credits should return zero rows';
+    END IF;
+
+    RAISE NOTICE
+        'PASS: Person without acting credits returned zero rows';
+
+    FOREACH v_input IN ARRAY ARRAY[NULL::TEXT, '', '   ']
+    LOOP
+        BEGIN
+            PERFORM *
+            FROM movie.find_coplayers(v_input);
+
+            RAISE EXCEPTION
+                'FAIL: NULL or blank person ID was accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'Person ID is required' THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE
+                    'PASS: NULL or blank person ID rejected';
+        END;
+    END LOOP;
+
+    WHILE EXISTS (
+        SELECT 1 FROM movie.person
+        WHERE nconst = v_missing
+    ) LOOP
+        v_missing := v_missing || '_x';
+    END LOOP;
+
+    BEGIN
+        PERFORM *
+        FROM movie.find_coplayers(v_missing);
+
+        RAISE EXCEPTION 'FAIL: Missing person was accepted';
+    EXCEPTION
+        WHEN raise_exception THEN
+            IF SQLERRM IS DISTINCT FROM
+               format('Person not found: %s', v_missing) THEN
+                RAISE;
+            END IF;
+
+            RAISE NOTICE 'PASS: Missing person rejected';
+    END;
+END;
+$$;
+
+ROLLBACK;

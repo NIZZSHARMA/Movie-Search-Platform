@@ -431,3 +431,55 @@ BEGIN
     ORDER BY p.nconst;
 END;
 $$;
+-------------------
+CREATE OR REPLACE FUNCTION movie.find_coplayers(
+    p_nconst TEXT
+)
+RETURNS TABLE (
+    nconst TEXT,
+    primary_name TEXT,
+    shared_title_count BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_nconst TEXT;
+BEGIN
+    IF p_nconst IS NULL OR btrim(p_nconst) = '' THEN
+        RAISE EXCEPTION 'Person ID is required';
+    END IF;
+
+    v_nconst := btrim(p_nconst);
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM movie.person AS p
+        WHERE p.nconst = v_nconst
+    ) THEN
+        RAISE EXCEPTION 'Person not found: %', v_nconst;
+    END IF;
+
+    RETURN QUERY
+    WITH actor_titles AS (
+        SELECT DISTINCT c.tconst
+        FROM movie.credit AS c
+        WHERE c.nconst = v_nconst
+          AND c.category IN ('actor', 'actress')
+    )
+    SELECT
+        p.nconst,
+        p.primary_name,
+        COUNT(DISTINCT c.tconst) AS shared_title_count
+    FROM actor_titles AS a
+    JOIN movie.credit AS c
+        ON c.tconst = a.tconst
+    JOIN movie.person AS p
+        ON p.nconst = c.nconst
+    WHERE c.category IN ('actor', 'actress')
+      AND c.nconst <> v_nconst
+    GROUP BY p.nconst, p.primary_name
+    ORDER BY
+        COUNT(DISTINCT c.tconst) DESC,
+        p.nconst;
+END;
+$$;
