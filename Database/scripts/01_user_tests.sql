@@ -2438,3 +2438,157 @@ END;
 $$;
 
 ROLLBACK;
+-----------------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_result JSONB;
+    v_count BIGINT;
+BEGIN
+    INSERT INTO movie.title (tconst, primary_title)
+    VALUES
+        ('portfolio_wtw_a', 'Word test A'),
+        ('portfolio_wtw_b', 'Word test B'),
+        ('portfolio_wtw_c', 'Word test C');
+
+    INSERT INTO movie.word (word)
+    VALUES
+        ('portfolio_wtw_alpha'),
+        ('portfolio_wtw_beta'),
+        ('portfolio_wtw_gamma'),
+        ('portfolio_wtw_delta')
+    ON CONFLICT (word) DO NOTHING;
+
+    INSERT INTO movie.wi (tconst, word)
+    VALUES
+        ('portfolio_wtw_a', 'portfolio_wtw_alpha'),
+        ('portfolio_wtw_a', 'portfolio_wtw_beta'),
+        ('portfolio_wtw_a', 'portfolio_wtw_gamma'),
+        ('portfolio_wtw_b', 'portfolio_wtw_alpha'),
+        ('portfolio_wtw_b', 'portfolio_wtw_gamma'),
+        ('portfolio_wtw_b', 'portfolio_wtw_delta'),
+        ('portfolio_wtw_c', 'portfolio_wtw_beta');
+
+    -- Count every word across both matching titles.
+    SELECT jsonb_agg(
+        jsonb_build_array(s.word, s.frequency)
+        ORDER BY s.position
+    )
+    INTO v_result
+    FROM movie.word_to_words(
+        ARRAY[
+            '  PORTFOLIO_WTW_ALPHA  ',
+            'portfolio_wtw_alpha'
+        ]
+    ) WITH ORDINALITY AS s(word, frequency, position);
+
+    IF v_result IS DISTINCT FROM
+       '[["portfolio_wtw_alpha",2],
+         ["portfolio_wtw_gamma",2],
+         ["portfolio_wtw_beta",1],
+         ["portfolio_wtw_delta",1]]'::JSONB THEN
+        RAISE EXCEPTION
+            'FAIL: Incorrect words, frequencies or order: %',
+            v_result;
+    END IF;
+
+    RAISE NOTICE 'PASS: All matching titles used and frequencies correct';
+    RAISE NOTICE 'PASS: Frequency order and alphabetical ties correct';
+    RAISE NOTICE 'PASS: Case, spaces and duplicate keywords handled';
+
+    -- Check the result limit.
+    SELECT jsonb_agg(
+        jsonb_build_array(s.word, s.frequency)
+        ORDER BY s.position
+    )
+    INTO v_result
+    FROM movie.word_to_words(
+        ARRAY['portfolio_wtw_alpha'], 1
+    ) WITH ORDINALITY AS s(word, frequency, position);
+
+    IF v_result IS DISTINCT FROM
+       '[["portfolio_wtw_alpha",2]]'::JSONB THEN
+        RAISE EXCEPTION 'FAIL: Result limit is incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Result limit respected';
+
+    -- Both keywords must occur in the matched title.
+    SELECT jsonb_agg(
+        jsonb_build_array(s.word, s.frequency)
+        ORDER BY s.position
+    )
+    INTO v_result
+    FROM movie.word_to_words(
+        ARRAY['portfolio_wtw_alpha', 'portfolio_wtw_beta']
+    ) WITH ORDINALITY AS s(word, frequency, position);
+
+    IF v_result IS DISTINCT FROM
+       '[["portfolio_wtw_alpha",1],
+         ["portfolio_wtw_beta",1],
+         ["portfolio_wtw_gamma",1]]'::JSONB THEN
+        RAISE EXCEPTION 'FAIL: All-keyword matching is incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Only titles matching all keywords used';
+
+    -- A partial word must not match.
+    SELECT COUNT(*) INTO v_count
+    FROM movie.word_to_words(
+        ARRAY['portfolio_wtw_alph']
+    );
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION 'FAIL: Unmatched keyword returned words';
+    END IF;
+
+    RAISE NOTICE 'PASS: Unmatched keyword returned zero rows';
+
+    -- Expected validation errors are caught below.
+    BEGIN
+        PERFORM * FROM movie.word_to_words(
+            ARRAY['portfolio_wtw_alpha', '']
+        );
+
+        RAISE EXCEPTION 'FAIL: Blank keyword accepted';
+    EXCEPTION WHEN raise_exception THEN
+        IF SQLERRM IS DISTINCT FROM
+           'Keywords must not be NULL or blank' THEN
+            RAISE;
+        END IF;
+
+        RAISE NOTICE 'PASS: Blank keyword rejected';
+    END;
+
+    BEGIN
+        PERFORM * FROM movie.word_to_words(NULL::TEXT[]);
+
+        RAISE EXCEPTION 'FAIL: NULL keyword array accepted';
+    EXCEPTION WHEN raise_exception THEN
+        IF SQLERRM IS DISTINCT FROM
+           'At least one keyword is required' THEN
+            RAISE;
+        END IF;
+
+        RAISE NOTICE 'PASS: NULL keyword array rejected';
+    END;
+
+    BEGIN
+        PERFORM * FROM movie.word_to_words(
+            ARRAY['portfolio_wtw_alpha'], 0
+        );
+
+        RAISE EXCEPTION 'FAIL: Invalid limit accepted';
+    EXCEPTION WHEN raise_exception THEN
+        IF SQLERRM IS DISTINCT FROM
+           'Limit must be a positive integer' THEN
+            RAISE;
+        END IF;
+
+        RAISE NOTICE 'PASS: Invalid limit rejected';
+    END;
+END;
+$$;
+
+ROLLBACK;

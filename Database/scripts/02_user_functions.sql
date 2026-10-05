@@ -832,3 +832,37 @@ BEGIN
         t.tconst;
 END;
 $$;
+-----
+CREATE OR REPLACE FUNCTION movie.word_to_words(
+    p_keywords TEXT[],
+    p_limit INTEGER DEFAULT 10
+)
+RETURNS TABLE (
+    word TEXT,
+    frequency BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF p_limit IS NULL OR p_limit < 1 THEN
+        RAISE EXCEPTION 'Limit must be a positive integer';
+    END IF;
+
+    RETURN QUERY
+    WITH matched_titles AS (
+        SELECT m.tconst
+        FROM movie.exact_match(p_keywords) AS m
+    )
+    SELECT
+        w.word,
+        COUNT(*) AS frequency
+    FROM matched_titles AS m
+    JOIN movie.wi AS w
+        ON w.tconst = m.tconst
+    GROUP BY w.word
+    ORDER BY
+        COUNT(*) DESC,
+        w.word COLLATE "C"
+    LIMIT p_limit;
+END;
+$$;
