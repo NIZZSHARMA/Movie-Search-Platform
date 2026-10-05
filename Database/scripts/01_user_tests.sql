@@ -561,3 +561,170 @@ END;
 $$;
 
 ROLLBACK;
+-----
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_missing_user_id BIGINT;
+    v_tconst TEXT;
+    v_nconst TEXT;
+    v_missing_title TEXT := 'portfolio_missing_title';
+    v_missing_person TEXT := 'portfolio_missing_person';
+BEGIN
+    SELECT tconst INTO v_tconst
+    FROM movie.title
+    LIMIT 1;
+
+    SELECT nconst INTO v_nconst
+    FROM movie.person
+    LIMIT 1;
+
+    IF v_tconst IS NULL OR v_nconst IS NULL THEN
+        RAISE EXCEPTION 'FAIL: Test requires a title and person';
+    END IF;
+
+    -- Ensure test IDs do not exist
+    WHILE EXISTS (
+        SELECT 1 FROM movie.title WHERE tconst = v_missing_title
+    ) LOOP
+        v_missing_title := v_missing_title || '_x';
+    END LOOP;
+
+    WHILE EXISTS (
+        SELECT 1 FROM movie.person WHERE nconst = v_missing_person
+    ) LOOP
+        v_missing_person := v_missing_person || '_x';
+    END LOOP;
+
+    v_user_id := framework.create_user(
+        'portfolio_bookmark_fk_test',
+        'portfolio_bookmark_fk_test@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    v_missing_user_id := framework.create_user(
+        'portfolio_bookmark_missing_user',
+        'portfolio_bookmark_missing_user@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    DELETE FROM framework.app_user
+    WHERE user_id = v_missing_user_id;
+
+    BEGIN
+        PERFORM framework.add_title_bookmark(
+            v_missing_user_id, v_tconst
+        );
+        RAISE EXCEPTION 'FAIL: Missing user accepted for title bookmark';
+    EXCEPTION
+        WHEN foreign_key_violation THEN
+            RAISE NOTICE 'PASS: Title bookmark rejected missing user';
+    END;
+
+    BEGIN
+        PERFORM framework.add_title_bookmark(
+            v_user_id, v_missing_title
+        );
+        RAISE EXCEPTION 'FAIL: Missing title was accepted';
+    EXCEPTION
+        WHEN foreign_key_violation THEN
+            RAISE NOTICE 'PASS: Missing title was rejected';
+    END;
+
+    BEGIN
+        PERFORM framework.add_person_bookmark(
+            v_missing_user_id, v_nconst
+        );
+        RAISE EXCEPTION 'FAIL: Missing user accepted for person bookmark';
+    EXCEPTION
+        WHEN foreign_key_violation THEN
+            RAISE NOTICE 'PASS: Person bookmark rejected missing user';
+    END;
+
+    BEGIN
+        PERFORM framework.add_person_bookmark(
+            v_user_id, v_missing_person
+        );
+        RAISE EXCEPTION 'FAIL: Missing person was accepted';
+    EXCEPTION
+        WHEN foreign_key_violation THEN
+            RAISE NOTICE 'PASS: Missing person was rejected';
+    END;
+
+    IF EXISTS (
+        SELECT 1 FROM framework.user_bookmark_title
+        WHERE user_id IN (v_user_id, v_missing_user_id)
+    ) OR EXISTS (
+        SELECT 1 FROM framework.user_bookmark_person
+        WHERE user_id IN (v_user_id, v_missing_user_id)
+    ) THEN
+        RAISE EXCEPTION 'FAIL: Rejected additions saved a bookmark';
+    END IF;
+
+    RAISE NOTICE 'PASS: Rejected additions saved no bookmarks';
+END;
+$$;
+
+ROLLBACK;
+------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_function TEXT;
+    v_case RECORD;
+    v_expected TEXT;
+BEGIN
+    FOREACH v_function IN ARRAY ARRAY[
+        'add_title_bookmark',
+        'remove_title_bookmark',
+        'add_person_bookmark',
+        'remove_person_bookmark'
+    ]
+    LOOP
+        FOR v_case IN
+            SELECT *
+            FROM (
+                VALUES
+                    ('NULL user ID', NULL::BIGINT, 'test_id'),
+                    ('NULL item ID', 1::BIGINT, NULL::TEXT),
+                    ('Empty item ID', 1::BIGINT, ''),
+                    ('Blank item ID', 1::BIGINT, '   ')
+            ) AS cases(label, user_id, item_id)
+        LOOP
+            IF v_case.user_id IS NULL THEN
+                v_expected := 'User ID is required';
+            ELSIF v_function IN (
+                'add_title_bookmark', 'remove_title_bookmark'
+            ) THEN
+                v_expected := 'Title ID is required';
+            ELSE
+                v_expected := 'Person ID is required';
+            END IF;
+
+            BEGIN
+                EXECUTE format(
+                    'SELECT framework.%I($1, $2)',
+                    v_function
+                )
+                USING v_case.user_id, v_case.item_id;
+
+                RAISE EXCEPTION 'FAIL: % accepted %',
+                    v_function, v_case.label;
+            EXCEPTION
+                WHEN raise_exception THEN
+                    IF SQLERRM = v_expected THEN
+                        RAISE NOTICE 'PASS: % rejected %',
+                            v_function, v_case.label;
+                    ELSE
+                        RAISE;
+                    END IF;
+            END;
+        END LOOP;
+    END LOOP;
+END;
+$$;
+
+ROLLBACK;
