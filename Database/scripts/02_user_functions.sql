@@ -866,3 +866,61 @@ BEGIN
     LIMIT p_limit;
 END;
 $$;
+-----
+CREATE OR REPLACE FUNCTION framework.add_person_bookmark(
+    p_user_id BIGINT,
+    p_nconst TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_rows INTEGER;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    IF p_nconst IS NULL OR btrim(p_nconst) = '' THEN
+        RAISE EXCEPTION 'Person ID is required';
+    END IF;
+
+    INSERT INTO framework.user_bookmark_person (
+        user_id, nconst
+    )
+    VALUES (
+        p_user_id, btrim(p_nconst)
+    )
+    ON CONFLICT (user_id, nconst) DO NOTHING;
+
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RETURN v_rows = 1;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION framework.remove_person_bookmark(
+    p_user_id BIGINT,
+    p_nconst TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_rows INTEGER;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    IF p_nconst IS NULL OR btrim(p_nconst) = '' THEN
+        RAISE EXCEPTION 'Person ID is required';
+    END IF;
+
+    DELETE FROM framework.user_bookmark_person
+    WHERE user_id = p_user_id
+      AND nconst = btrim(p_nconst);
+
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    RETURN v_rows = 1;
+END;
+$$;
