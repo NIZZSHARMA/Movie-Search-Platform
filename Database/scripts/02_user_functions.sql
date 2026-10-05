@@ -776,3 +776,59 @@ BEGIN
     ORDER BY t.tconst;
 END;
 $$;
+-----------
+CREATE OR REPLACE FUNCTION movie.best_match(
+    p_keywords TEXT[]
+)
+RETURNS TABLE (
+    tconst TEXT,
+    primary_title TEXT,
+    match_count BIGINT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_keywords TEXT[];
+BEGIN
+    IF p_keywords IS NULL
+       OR cardinality(p_keywords) = 0 THEN
+        RAISE EXCEPTION 'At least one keyword is required';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM unnest(p_keywords) AS k(value)
+        WHERE k.value IS NULL
+           OR btrim(k.value) = ''
+    ) THEN
+        RAISE EXCEPTION 'Keywords must not be NULL or blank';
+    END IF;
+
+    SELECT array_agg(k.keyword ORDER BY k.keyword)
+    INTO v_keywords
+    FROM (
+        SELECT DISTINCT
+            lower(btrim(u.value)) COLLATE "C" AS keyword
+        FROM unnest(p_keywords) AS u(value)
+    ) AS k;
+
+    RETURN QUERY
+    SELECT
+        t.tconst,
+        t.primary_title,
+        matched.keyword_count
+    FROM (
+        SELECT
+            w.tconst,
+            COUNT(DISTINCT w.word) AS keyword_count
+        FROM movie.wi AS w
+        WHERE w.word = ANY(v_keywords)
+        GROUP BY w.tconst
+    ) AS matched
+    JOIN movie.title AS t
+        ON t.tconst = matched.tconst
+    ORDER BY
+        matched.keyword_count DESC,
+        t.tconst;
+END;
+$$;

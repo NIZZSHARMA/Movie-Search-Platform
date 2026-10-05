@@ -2279,3 +2279,162 @@ END;
 $$;
 
 ROLLBACK;
+------
+BEGIN;
+
+DO $$
+DECLARE
+    v_result JSONB;
+    v_count BIGINT;
+    v_keywords TEXT[];
+    v_case INTEGER;
+BEGIN
+    INSERT INTO movie.title (tconst, primary_title)
+    VALUES
+        ('test_bm_a', 'Three Matches'),
+        ('test_bm_b', 'Two Matches'),
+        ('test_bm_c', 'One Match C'),
+        ('test_bm_d', 'One Match D'),
+        ('test_bm_none', 'No Matches');
+
+    INSERT INTO movie.word (word)
+    VALUES
+        ('test_bm_alpha'),
+        ('test_bm_beta'),
+        ('test_bm_gamma')
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO movie.wi (tconst, word)
+    VALUES
+        ('test_bm_a', 'test_bm_alpha'),
+        ('test_bm_a', 'test_bm_beta'),
+        ('test_bm_a', 'test_bm_gamma'),
+        ('test_bm_b', 'test_bm_alpha'),
+        ('test_bm_b', 'test_bm_beta'),
+        ('test_bm_c', 'test_bm_alpha'),
+        ('test_bm_d', 'test_bm_beta');
+
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'id', s.tconst,
+            'matches', s.match_count
+        )
+        ORDER BY s.position
+    )
+    INTO v_result
+    FROM movie.best_match(
+        ARRAY[
+            '  TEST_BM_ALPHA  ',
+            'test_bm_beta',
+            'test_bm_gamma',
+            'test_bm_alpha'
+        ]
+    ) WITH ORDINALITY AS s(
+        tconst, primary_title, match_count, position
+    );
+
+    IF v_result IS DISTINCT FROM
+       '[{"id":"test_bm_a","matches":3},
+         {"id":"test_bm_b","matches":2},
+         {"id":"test_bm_c","matches":1},
+         {"id":"test_bm_d","matches":1}]'::JSONB THEN
+        RAISE EXCEPTION
+            'FAIL: Incorrect matches, scores or order: %',
+            v_result;
+    END IF;
+
+    RAISE NOTICE 'PASS: Results ranked by 3, 2 and 1 matches';
+    RAISE NOTICE 'PASS: Equal scores ordered by title ID';
+    RAISE NOTICE 'PASS: Zero-match title excluded';
+    RAISE NOTICE 'PASS: Case, spaces and duplicate keywords handled';
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM movie.best_match(ARRAY['test_bm_gamma']) AS s
+        WHERE s.tconst = 'test_bm_a'
+          AND s.primary_title = 'Three Matches'
+          AND s.match_count = 1
+    )
+    OR (
+        SELECT COUNT(*)
+        FROM movie.best_match(ARRAY['test_bm_gamma'])
+    ) <> 1 THEN
+        RAISE EXCEPTION 'FAIL: Single-keyword result incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: Single keyword returns correct ID, name and score';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.best_match(ARRAY['test_bm_alph']);
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION 'FAIL: Partial keyword matched a whole word';
+    END IF;
+
+    RAISE NOTICE 'PASS: Unmatched partial keyword returns zero rows';
+
+    SELECT COUNT(*) INTO v_count
+    FROM movie.best_match(
+        ARRAY['test_bm_gamma', 'test_bm_alph']
+    ) AS s
+    WHERE s.tconst = 'test_bm_a'
+      AND s.match_count = 1;
+
+    IF v_count <> 1
+       OR (
+           SELECT COUNT(*)
+           FROM movie.best_match(
+               ARRAY['test_bm_gamma', 'test_bm_alph']
+           )
+       ) <> 1 THEN
+        RAISE EXCEPTION
+            'FAIL: Unmatched keyword affected the valid match';
+    END IF;
+
+    RAISE NOTICE 'PASS: Valid matches returned despite an unmatched keyword';
+
+    FOR v_case IN 1..2 LOOP
+        v_keywords := CASE v_case
+            WHEN 1 THEN NULL::TEXT[]
+            ELSE ARRAY[]::TEXT[]
+        END;
+
+        BEGIN
+            PERFORM * FROM movie.best_match(v_keywords);
+            RAISE EXCEPTION 'FAIL: NULL or empty array accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'At least one keyword is required' THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: NULL or empty keyword array rejected';
+        END;
+    END LOOP;
+
+    FOR v_case IN 1..4 LOOP
+        v_keywords := CASE v_case
+            WHEN 1 THEN ARRAY[NULL::TEXT]
+            WHEN 2 THEN ARRAY['']
+            WHEN 3 THEN ARRAY['   ']
+            ELSE ARRAY['test_bm_alpha', NULL::TEXT]
+        END;
+
+        BEGIN
+            PERFORM * FROM movie.best_match(v_keywords);
+            RAISE EXCEPTION 'FAIL: NULL or blank keyword accepted';
+        EXCEPTION
+            WHEN raise_exception THEN
+                IF SQLERRM IS DISTINCT FROM
+                   'Keywords must not be NULL or blank' THEN
+                    RAISE;
+                END IF;
+
+                RAISE NOTICE 'PASS: NULL or blank keyword rejected';
+        END;
+    END LOOP;
+END;
+$$;
+
+ROLLBACK;
