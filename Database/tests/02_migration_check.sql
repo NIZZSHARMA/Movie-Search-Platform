@@ -1,3 +1,75 @@
+-- Run locally against a database containing the populated movie schema
+-- and the nine public source tables.
+-- Requires movie_migration_check to be absent before starting.
+-- This setup does not change the original movie or public data.
+
+BEGIN;
+
+SET LOCAL search_path = pg_catalog;
+
+CREATE SCHEMA movie_migration_check;
+
+-- Copy movie tables, primary keys, checks and indexes.
+DO $$
+DECLARE
+    v_table TEXT;
+BEGIN
+    FOR v_table IN
+        SELECT c.relname
+        FROM pg_class AS c
+        JOIN pg_namespace AS n
+          ON n.oid = c.relnamespace
+        WHERE n.nspname = 'movie'
+          AND c.relkind = 'r'
+        ORDER BY c.relname
+    LOOP
+        EXECUTE format(
+            'CREATE TABLE movie_migration_check.%I
+             (LIKE movie.%I INCLUDING ALL)',
+            v_table, v_table
+        );
+    END LOOP;
+END;
+$$;
+
+-- Copy foreign keys, pointing them to the test tables.
+DO $$
+DECLARE
+    v_fk RECORD;
+BEGIN
+    FOR v_fk IN
+        SELECT
+            t.relname AS table_name,
+            fk.conname AS constraint_name,
+            pg_get_constraintdef(fk.oid) AS definition
+        FROM pg_constraint AS fk
+        JOIN pg_class AS t
+          ON t.oid = fk.conrelid
+        JOIN pg_namespace AS n
+          ON n.oid = t.relnamespace
+        WHERE n.nspname = 'movie'
+          AND fk.contype = 'f'
+        ORDER BY t.relname, fk.conname
+    LOOP
+        EXECUTE format(
+            'ALTER TABLE movie_migration_check.%I
+             ADD CONSTRAINT %I %s',
+            v_fk.table_name,
+            v_fk.constraint_name,
+            replace(
+                v_fk.definition,
+                'movie.',
+                'movie_migration_check.'
+            )
+        );
+    END LOOP;
+END;
+$$;
+
+COMMIT;
+
+-- The test migration and comparison checks follow below.
+
 -- Import the provided public source tables into the movie schema.
 --
 -- Prerequisites:
