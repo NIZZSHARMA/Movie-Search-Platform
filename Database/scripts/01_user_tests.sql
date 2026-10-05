@@ -728,3 +728,88 @@ END;
 $$;
 
 ROLLBACK;
+-----------------
+BEGIN;
+
+DO $$
+DECLARE
+    v_user_id BIGINT;
+    v_count BIGINT;
+BEGIN
+    v_user_id := framework.create_user(
+        'portfolio_search_test',
+        'portfolio_search_test@example.com',
+        'TEST_HASH_ONLY_NOT_FOR_LOGIN'
+    );
+
+    -- Temporary examples for each searchable field
+    INSERT INTO movie.title (
+        tconst, primary_title, original_title
+    )
+    VALUES
+        ('portfolio_search_title', 'PortfolioSearchMarkerXYZ', NULL),
+        ('portfolio_search_original', 'Original title test',
+         'PortfolioSearchMarkerXYZ'),
+        ('portfolio_search_plot', 'Plot test', NULL);
+
+    INSERT INTO movie.omdb_extra (tconst, plot)
+    VALUES (
+        'portfolio_search_plot',
+        'A story about PortfolioSearchMarkerXYZ.'
+    );
+
+    -- Check matching, letter case and spaces
+    SELECT COUNT(*) INTO v_count
+    FROM movie.string_search(
+        v_user_id, '  PORTFOLIOSEARCHMARKERXYZ  '
+    )
+    WHERE tconst IN (
+        'portfolio_search_title',
+        'portfolio_search_original',
+        'portfolio_search_plot'
+    );
+
+    IF v_count <> 3 THEN
+        RAISE EXCEPTION 'FAIL: Expected all 3 test titles, got %',
+            v_count;
+    END IF;
+
+    RAISE NOTICE 'PASS: Primary title, original title and plot matched';
+    RAISE NOTICE 'PASS: Search ignored letter case and trimmed spaces';
+
+    IF (
+        SELECT COUNT(*)
+        FROM framework.user_search_history
+        WHERE user_id = v_user_id
+          AND query_text = 'PORTFOLIOSEARCHMARKERXYZ'
+          AND performed_at IS NOT NULL
+    ) <> 1 THEN
+        RAISE EXCEPTION 'FAIL: Search history is incorrect';
+    END IF;
+
+    RAISE NOTICE 'PASS: One history entry saved with text and timestamp';
+
+    -- Search for text that is absent from all title/plot fields
+    SELECT COUNT(*) INTO v_count
+    FROM movie.string_search(
+        v_user_id,
+        'PortfolioSearchMarkerXYZ_NoResult_987654321'
+    );
+
+    IF v_count <> 0 THEN
+        RAISE EXCEPTION 'FAIL: Expected zero results, got %', v_count;
+    END IF;
+
+    IF (
+        SELECT COUNT(*)
+        FROM framework.user_search_history
+        WHERE user_id = v_user_id
+    ) <> 2 THEN
+        RAISE EXCEPTION 'FAIL: No-result search was not recorded';
+    END IF;
+
+    RAISE NOTICE 'PASS: No-result search returned zero rows and saved history';
+END;
+$$;
+
+ROLLBACK;

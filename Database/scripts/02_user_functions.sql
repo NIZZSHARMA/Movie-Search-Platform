@@ -133,3 +133,49 @@ BEGIN
     RETURN v_rows = 1;
 END;
 $$;
+--------------
+CREATE OR REPLACE FUNCTION movie.string_search(
+    p_user_id BIGINT,
+    p_query TEXT
+)
+RETURNS TABLE (
+    tconst TEXT,
+    primary_title TEXT,
+    plot TEXT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_query TEXT;
+BEGIN
+    IF p_user_id IS NULL THEN
+        RAISE EXCEPTION 'User ID is required';
+    END IF;
+
+    IF p_query IS NULL OR btrim(p_query) = '' THEN
+        RAISE EXCEPTION 'Search text is required';
+    END IF;
+
+    v_query := btrim(p_query);
+
+    -- Record one history entry for each search call
+    INSERT INTO framework.user_search_history (
+        user_id, query_text
+    )
+    VALUES (p_user_id, v_query);
+
+    -- Match literal text, ignoring letter case
+    RETURN QUERY
+    SELECT
+        t.tconst,
+        t.primary_title,
+        o.plot
+    FROM movie.title AS t
+    LEFT JOIN movie.omdb_extra AS o
+        ON o.tconst = t.tconst
+    WHERE strpos(lower(t.primary_title), lower(v_query)) > 0
+       OR strpos(lower(t.original_title), lower(v_query)) > 0
+       OR strpos(lower(o.plot), lower(v_query)) > 0
+    ORDER BY t.tconst;
+END;
+$$;
