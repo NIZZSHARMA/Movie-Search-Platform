@@ -1,0 +1,181 @@
+NOTICE:  PASS: Duplicate email was rejected
+NOTICE:  PASS: Blank username was rejected
+NOTICE:  PASS: Blank email was rejected
+NOTICE:  PASS: Blank password hash was rejected
+NOTICE:  PASS: User ID stayed the same
+NOTICE:  PASS: Username and email updated and trimmed
+NOTICE:  PASS: Password hash updated
+NOTICE:  PASS: Duplicate username was rejected
+NOTICE:  PASS: Duplicate email was rejected
+NOTICE:  PASS: Rejected updates preserved original details
+NOTICE:  PASS: NULL user ID was rejected
+NOTICE:  PASS: NULL username was rejected
+NOTICE:  PASS: Blank username was rejected
+NOTICE:  PASS: NULL email was rejected
+NOTICE:  PASS: Blank email was rejected
+NOTICE:  PASS: NULL password hash was rejected
+NOTICE:  PASS: Blank password hash was rejected
+NOTICE:  PASS: Missing user was rejected
+NOTICE:  PASS: Bookmark added and title ID trimmed
+NOTICE:  PASS: Duplicate bookmark was not created
+NOTICE:  PASS: Bookmark removed
+NOTICE:  PASS: Missing bookmark removal returned false
+NOTICE:  PASS: Person bookmark added and ID trimmed
+NOTICE:  PASS: Duplicate person bookmark was not created
+NOTICE:  PASS: Person bookmark removed
+NOTICE:  PASS: Missing person bookmark removal returned false
+NOTICE:  PASS: Title bookmark rejected missing user
+NOTICE:  PASS: Missing title was rejected
+NOTICE:  PASS: Person bookmark rejected missing user
+NOTICE:  PASS: Missing person was rejected
+NOTICE:  PASS: Rejected additions saved no bookmarks
+NOTICE:  PASS: add_title_bookmark rejected NULL user ID
+NOTICE:  PASS: add_title_bookmark rejected NULL item ID
+NOTICE:  PASS: add_title_bookmark rejected Empty item ID
+NOTICE:  PASS: add_title_bookmark rejected Blank item ID
+NOTICE:  PASS: remove_title_bookmark rejected NULL user ID
+NOTICE:  PASS: remove_title_bookmark rejected NULL item ID
+NOTICE:  PASS: remove_title_bookmark rejected Empty item ID
+NOTICE:  PASS: remove_title_bookmark rejected Blank item ID
+NOTICE:  PASS: add_person_bookmark rejected NULL user ID
+NOTICE:  PASS: add_person_bookmark rejected NULL item ID
+NOTICE:  PASS: add_person_bookmark rejected Empty item ID
+NOTICE:  PASS: add_person_bookmark rejected Blank item ID
+NOTICE:  PASS: remove_person_bookmark rejected NULL user ID
+NOTICE:  PASS: remove_person_bookmark rejected NULL item ID
+NOTICE:  PASS: remove_person_bookmark rejected Empty item ID
+NOTICE:  PASS: remove_person_bookmark rejected Blank item ID
+NOTICE:  PASS: Primary title, original title and plot matched
+NOTICE:  PASS: Search ignored letter case and trimmed spaces
+NOTICE:  PASS: One history entry saved with text and timestamp
+NOTICE:  PASS: No-result search returned zero rows and saved history
+NOTICE:  PASS: User ID is required
+NOTICE:  PASS: Search text is required
+NOTICE:  PASS: Search text is required
+NOTICE:  PASS: Search text is required
+NOTICE:  PASS: Missing user was rejected
+NOTICE:  PASS: Invalid searches did not create history
+NOTICE:  PASS: First rating updated average and vote count
+NOTICE:  PASS: Re-rating replaced the rating without increasing votes
+NOTICE:  PASS: Two users have separate ratings and correct combined average
+NOTICE:  PASS: All three rating calls saved in history
+NOTICE:  PASS: Original IMDb rating and votes preserved
+NOTICE:  PASS: User ID is required
+NOTICE:  PASS: Title ID is required
+NOTICE:  PASS: Title ID is required
+NOTICE:  PASS: Title ID is required
+NOTICE:  PASS: Rating must be an integer between 1 and 10
+NOTICE:  PASS: Rating must be an integer between 1 and 10
+NOTICE:  PASS: Rating must be an integer between 1 and 10
+NOTICE:  PASS: Missing user was rejected
+NOTICE:  PASS: Missing title was rejected
+NOTICE:  PASS: Invalid calls saved no rating or history
+NOTICE:  PASS: Unrated title has NULL average and zero votes
+NOTICE:  PASS: Rating 1 accepted without IMDb baseline
+NOTICE:  PASS: Rating 10 accepted, one vote and two history entries
+NOTICE:  PASS: Four fields matched with case-insensitive substrings
+NOTICE:  PASS: Multiple matching credits produced no duplicate titles
+NOTICE:  PASS: NULL and blank fields ignored correctly
+NOTICE:  PASS: All supplied fields must match
+NOTICE:  PASS: Search fields and timestamp saved in history
+NOTICE:  PASS: No-result search also saved in history
+NOTICE:  PASS: User ID is required
+NOTICE:  PASS: At least one search field is required
+NOTICE:  PASS: At least one search field is required
+NOTICE:  PASS: At least one search field is required
+NOTICE:  PASS: At least one search field is required
+NOTICE:  PASS: Missing user was rejected
+NOTICE:  PASS: Invalid searches did not create history
+NOTICE:  PASS: Correct actors and actresses returned
+NOTICE:  PASS: Shared titles counted once despite duplicate credits
+NOTICE:  PASS: Main actor and director excluded
+NOTICE:  PASS: Results ordered by shared title count and input trimmed
+NOTICE:  PASS: Person without acting credits returned zero rows
+NOTICE:  PASS: NULL or blank person ID rejected
+NOTICE:  PASS: NULL or blank person ID rejected
+NOTICE:  PASS: NULL or blank person ID rejected
+NOTICE:  PASS: Missing person rejected
+NOTICE:  PASS: Vote-weighted actor rating is 6.5
+NOTICE:  PASS: Total votes are 400
+NOTICE:  PASS: Duplicate credit did not count the movie twice
+NOTICE:  PASS: Actors ordered by decreasing rating
+NOTICE:  PASS: Unrated actor appears last
+NOTICE:  PASS: Duplicate actor and director excluded
+NOTICE:  PASS: Title ID spaces trimmed
+NOTICE:  PASS: Actor name and rating details correct
+NOTICE:  PASS: Movie without cast returns zero rows
+NOTICE:  PASS: NULL or blank title ID rejected
+NOTICE:  PASS: NULL or blank title ID rejected
+NOTICE:  PASS: NULL or blank title ID rejected
+NOTICE:  PASS: Missing title rejected
+NOTICE:  PASS: Correct similar titles and order
+NOTICE:  PASS: Source and unrelated titles excluded
+NOTICE:  PASS: Title ID trimmed
+NOTICE:  PASS: Scores are 1, 0.5 and 1/3
+NOTICE:  PASS: Limit returns only the best match
+NOTICE:  PASS: Title without genres returns zero rows
+NOTICE:  PASS: NULL or blank title ID rejected
+NOTICE:  PASS: NULL or blank title ID rejected
+NOTICE:  PASS: NULL or blank title ID rejected
+NOTICE:  PASS: Invalid limit rejected
+NOTICE:  PASS: Invalid limit rejected
+NOTICE:  PASS: Invalid limit rejected
+NOTICE:  PASS: Missing title rejected
+NOTICE:  PASS: Correct words and title frequencies
+NOTICE:  PASS: Duplicate credits and crew links counted once
+NOTICE:  PASS: Crew-only title included
+NOTICE:  PASS: Same-name persons combined
+NOTICE:  PASS: Name case and spaces handled
+NOTICE:  PASS: Frequency order and alphabetical ties correct
+NOTICE:  PASS: Limit returns the most frequent word
+NOTICE:  PASS: Person without titles returns zero rows
+NOTICE:  PASS: Unmatched partial name returns zero rows
+NOTICE:  PASS: NULL or blank name rejected
+NOTICE:  PASS: NULL or blank name rejected
+NOTICE:  PASS: NULL or blank name rejected
+NOTICE:  PASS: Invalid limit rejected
+NOTICE:  PASS: Invalid limit rejected
+NOTICE:  PASS: Invalid limit rejected
+NOTICE:  PASS: Only the title containing both keywords returned
+NOTICE:  PASS: Correct title ID and name returned
+NOTICE:  PASS: Case, spaces and duplicate keywords handled
+NOTICE:  PASS: Single keyword returns both matching titles
+NOTICE:  PASS: Partial keyword does not match a whole word
+NOTICE:  PASS: An unmatched keyword makes the result empty
+NOTICE:  PASS: NULL or empty keyword array rejected
+NOTICE:  PASS: NULL or empty keyword array rejected
+NOTICE:  PASS: NULL or blank keyword rejected
+NOTICE:  PASS: NULL or blank keyword rejected
+NOTICE:  PASS: NULL or blank keyword rejected
+NOTICE:  PASS: NULL or blank keyword rejected
+NOTICE:  PASS: Results ranked by 3, 2 and 1 matches
+NOTICE:  PASS: Equal scores ordered by title ID
+NOTICE:  PASS: Zero-match title excluded
+NOTICE:  PASS: Case, spaces and duplicate keywords handled
+NOTICE:  PASS: Single keyword returns correct ID, name and score
+NOTICE:  PASS: Unmatched partial keyword returns zero rows
+NOTICE:  PASS: Valid matches returned despite an unmatched keyword
+NOTICE:  PASS: NULL or empty keyword array rejected
+NOTICE:  PASS: NULL or empty keyword array rejected
+NOTICE:  PASS: NULL or blank keyword rejected
+NOTICE:  PASS: NULL or blank keyword rejected
+NOTICE:  PASS: NULL or blank keyword rejected
+NOTICE:  PASS: NULL or blank keyword rejected
+NOTICE:  PASS: All matching titles used and frequencies correct
+NOTICE:  PASS: Frequency order and alphabetical ties correct
+NOTICE:  PASS: Case, spaces and duplicate keywords handled
+NOTICE:  PASS: Result limit respected
+NOTICE:  PASS: Only titles matching all keywords used
+NOTICE:  PASS: Unmatched keyword returned zero rows
+NOTICE:  PASS: Blank keyword rejected
+NOTICE:  PASS: NULL keyword array rejected
+NOTICE:  PASS: Invalid limit rejected
+NOTICE:  PASS: Partial name, case and spaces handled correctly
+NOTICE:  PASS: Name search and timestamp saved in history
+NOTICE:  PASS: No-result search returned no rows and saved history
+NOTICE:  PASS: Actor name accepted, case ignored and spaces trimmed
+NOTICE:  PASS: Name and ID searches returned the same coplayer
+NOTICE:  PASS: Duplicate actor names rejected with a clear message
+
+Successfully run. Total query runtime: 19 secs 148 msec.
+0 rows affected.
