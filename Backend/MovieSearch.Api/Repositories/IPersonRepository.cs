@@ -15,4 +15,14 @@ public interface IPersonRepository
         int offset,
         int pageSize,
         CancellationToken cancellationToken = default);
+
+    Task<int> CountTitlesAsync(
+        string nconst,
+        CancellationToken cancellationToken = default);
+
+    Task<List<Title>> GetTitlesPageAsync(
+        string nconst,
+        int offset,
+        int pageSize,
+        CancellationToken cancellationToken = default);
 }

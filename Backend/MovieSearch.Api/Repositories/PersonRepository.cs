@@ -42,4 +42,32 @@ public class PersonRepository : IPersonRepository
             .Take(pageSize)
             .ToListAsync(cancellationToken);
     }
+
+    public Task<int> CountTitlesAsync(
+        string nconst,
+        CancellationToken cancellationToken = default)
+    {
+        return _context.Titles
+            .Where(title => _context.Credits.Any(
+                credit => credit.Tconst == title.Tconst
+                    && credit.Nconst == nconst))
+            .CountAsync(cancellationToken);
+    }
+
+    public Task<List<Title>> GetTitlesPageAsync(
+        string nconst,
+        int offset,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        return _context.Titles
+            .AsNoTracking()
+            .Where(title => _context.Credits.Any(
+                credit => credit.Tconst == title.Tconst
+                    && credit.Nconst == nconst))
+            .OrderBy(title => title.Tconst)
+            .Skip(offset)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+    }
 }
