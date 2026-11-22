@@ -113,6 +113,96 @@ public class UsersController : ControllerBase
             ToDto(user));
     }
 
+    [HttpPut("{userId:long}")]
+    public async Task<IActionResult> Update(
+        long userId,
+        [FromBody] UpdateUserDto request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _repository.GetByIdAsync(
+            userId, cancellationToken);
+
+        if (user is null)
+        {
+            return NotFound();
+        }
+
+        var username = request.Username.Trim();
+        var email = request.Email.Trim();
+
+        if (username.Length < 3)
+        {
+            return BadRequest(new
+            {
+                message = "Username must contain at least 3 characters."
+            });
+        }
+
+        if (request.Password is not null
+            && string.IsNullOrWhiteSpace(request.Password))
+        {
+            return BadRequest(new
+            {
+                message = "Password must not be blank."
+            });
+        }
+
+        if (await _repository.UsernameExistsAsync(
+            username,
+            excludedUserId: userId,
+            cancellationToken: cancellationToken))
+        {
+            return Conflict(new
+            {
+                message = "Username is already in use."
+            });
+        }
+
+        if (await _repository.EmailExistsAsync(
+            email,
+            excludedUserId: userId,
+            cancellationToken: cancellationToken))
+        {
+            return Conflict(new
+            {
+                message = "Email is already in use."
+            });
+        }
+
+        user.Username = username;
+        user.Email = email;
+
+        if (request.Password is not null)
+        {
+            user.PasswordHash = _passwordHasher.HashPassword(
+                user, request.Password);
+        }
+
+        try
+        {
+            var updated = await _repository.UpdateAsync(
+                user, cancellationToken);
+
+            if (!updated)
+            {
+                return NotFound();
+            }
+        }
+        catch (DbUpdateException exception)
+            when (exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation
+            })
+        {
+            return Conflict(new
+            {
+                message = "Username or email is already in use."
+            });
+        }
+
+        return Ok(ToDto(user));
+    }
+
     private UserDto ToDto(AppUser user)
     {
         return new UserDto
