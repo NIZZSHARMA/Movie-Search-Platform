@@ -53,5 +53,16 @@ public class TitleRepository : ITitleRepository
             extra => extra.Tconst == tconst,
             cancellationToken);
 }
+public Task<List<string>> GetGenresAsync(
+    string tconst,
+    CancellationToken cancellationToken = default)
+{
+    return _context.TitleGenres
+        .AsNoTracking()
+        .Where(item => item.Tconst == tconst)
+        .OrderBy(item => item.Genre)
+        .Select(item => item.Genre)
+        .ToListAsync(cancellationToken);
+}
 
 }

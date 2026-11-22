@@ -102,8 +102,12 @@ public class TitlesController : ControllerBase
         {
             return NotFound();
         }
+
         var extra = await _repository.GetOmdbExtraAsync(
-         title.Tconst, cancellationToken);
+            title.Tconst, cancellationToken);
+
+        var genres = await _repository.GetGenresAsync(
+            title.Tconst, cancellationToken);
 
         return Ok(new TitleDetailsDto
         {
@@ -119,7 +123,8 @@ public class TitlesController : ControllerBase
             EndYear = title.EndYear,
             RuntimeMinutes = title.RuntimeMinutes,
             Plot = extra?.Plot,
-            Poster = extra?.Poster
+            Poster = extra?.Poster,
+            Genres = genres
         });
     }
 }

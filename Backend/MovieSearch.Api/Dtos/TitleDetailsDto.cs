@@ -24,4 +24,6 @@ public class TitleDetailsDto
 
     public string? Poster { get; set; }
     
+    public List<string> Genres { get; set; } = new();
+
 }

@@ -19,5 +19,9 @@ public interface ITitleRepository
 Task<OmdbExtra?> GetOmdbExtraAsync(
     string tconst,
     CancellationToken cancellationToken = default);
-    
+
+    Task<List<string>> GetGenresAsync(
+    string tconst,
+    CancellationToken cancellationToken = default);
+
 }
