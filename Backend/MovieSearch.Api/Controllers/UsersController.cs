@@ -216,7 +216,26 @@ public class UsersController : ControllerBase
 
         return Ok(ToDto(user));
     }
+    [HttpDelete("{userId:long}")]
+    public async Task<IActionResult> Delete(
+        long userId,
+        CancellationToken cancellationToken)
+    {
+        if (!IsCurrentUser(userId))
+        {
+            return Forbid();
+        }
 
+        var deleted = await _repository.DeleteAsync(
+            userId, cancellationToken);
+
+        if (!deleted)
+        {
+            return NotFound();
+        }
+
+        return NoContent();
+    }
     private bool IsCurrentUser(long userId)
     {
         var subject = User.FindFirst("sub")?.Value;
