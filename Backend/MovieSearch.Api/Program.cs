@@ -1,4 +1,14 @@
+using Microsoft.EntityFrameworkCore;
+using MovieSearch.Api.Data;
+
 var builder = WebApplication.CreateBuilder(args);
+var connectionString =
+    builder.Configuration.GetConnectionString("MovieDatabase")
+    ?? throw new InvalidOperationException(
+        "MovieDatabase connection string is missing.");
+
+builder.Services.AddDbContext<MovieDbContext>(options =>
+    options.UseNpgsql(connectionString));
 
 // Add services to the container.
 
