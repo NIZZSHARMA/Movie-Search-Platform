@@ -11,4 +11,5 @@ public class MovieDbContext : DbContext
     }
 
     public DbSet<Title> Titles => Set<Title>();
+    public DbSet<Person> Persons => Set<Person>();
 }
