@@ -18,11 +18,16 @@ public class MovieDbContext : DbContext
 
     public DbSet<TitleGenre> TitleGenres => Set<TitleGenre>();
 
+    public DbSet<Credit> Credits => Set<Credit>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.Entity<TitleGenre>()
             .HasKey(item => new { item.Tconst, item.Genre });
+
+        modelBuilder.Entity<Credit>()
+            .HasKey(item => new { item.Tconst, item.Ordering });
     }
 }
