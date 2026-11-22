@@ -1,5 +1,5 @@
-using MovieSearch.Api.Dtos;
 using Microsoft.AspNetCore.Mvc;
+using MovieSearch.Api.Dtos;
 using MovieSearch.Api.Repositories;
 
 namespace MovieSearch.Api.Controllers;
@@ -56,20 +56,22 @@ public class PersonsController : ControllerBase
         var persons = await _repository.GetPageAsync(
             (int)offset, pageSize, cancellationToken);
 
-       var items = persons.Select(person => new PersonDto
-{
-    Url = Url.Action(
-        nameof(GetById),
-        new { nconst = person.Nconst }),
-    Nconst = person.Nconst,
-    PrimaryName = person.PrimaryName,
-    BirthYear = person.BirthYear,
-    DeathYear = person.DeathYear
-});
+        var items = persons.Select(person => new PersonDto
+        {
+            Url = Url.Action(
+                nameof(GetById),
+                new { nconst = person.Nconst }),
+            Nconst = person.Nconst,
+            PrimaryName = person.PrimaryName,
+            BirthYear = person.BirthYear,
+            DeathYear = person.DeathYear
+        });
 
         return Ok(new
         {
-            url = Url.Action(nameof(GetAll), new { page, pageSize }),
+            url = Url.Action(
+                nameof(GetAll),
+                new { page, pageSize }),
             page,
             pageSize,
             totalCount,
@@ -102,14 +104,99 @@ public class PersonsController : ControllerBase
         }
 
         return Ok(new PersonDto
-{
-    Url = Url.Action(
-        nameof(GetById),
-        new { nconst = person.Nconst }),
-    Nconst = person.Nconst,
-    PrimaryName = person.PrimaryName,
-    BirthYear = person.BirthYear,
-    DeathYear = person.DeathYear
-});
+        {
+            Url = Url.Action(
+                nameof(GetById),
+                new { nconst = person.Nconst }),
+            Nconst = person.Nconst,
+            PrimaryName = person.PrimaryName,
+            BirthYear = person.BirthYear,
+            DeathYear = person.DeathYear
+        });
+    }
+
+    [HttpGet("{nconst}/titles")]
+    public async Task<IActionResult> GetTitles(
+        string nconst,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        const int defaultPageSize = 10;
+        const int maximumPageSize = 100;
+
+        if (page < 1)
+        {
+            return BadRequest(new
+            {
+                message = "Page must be at least 1."
+            });
+        }
+
+        if (pageSize < 1 || pageSize > maximumPageSize)
+        {
+            pageSize = defaultPageSize;
+        }
+
+        var offset = ((long)page - 1) * pageSize;
+
+        if (offset > int.MaxValue)
+        {
+            return BadRequest(new
+            {
+                message = "Requested page is too large."
+            });
+        }
+
+        var person = await _repository.GetByIdAsync(
+            nconst, cancellationToken);
+
+        if (person is null)
+        {
+            return NotFound();
+        }
+
+        var totalCount = await _repository.CountTitlesAsync(
+            nconst, cancellationToken);
+
+        var totalPages = (int)Math.Ceiling(
+            totalCount / (double)pageSize);
+
+        var titles = await _repository.GetTitlesPageAsync(
+            nconst, (int)offset, pageSize, cancellationToken);
+
+        var items = titles.Select(title => new TitleSummaryDto
+        {
+            Url = Url.Action(
+                nameof(TitlesController.GetById),
+                "Titles",
+                new { tconst = title.Tconst }),
+            Tconst = title.Tconst,
+            PrimaryTitle = title.PrimaryTitle,
+            TitleType = title.TitleType,
+            StartYear = title.StartYear
+        });
+
+        return Ok(new
+        {
+            url = Url.Action(
+                nameof(GetTitles),
+                new { nconst, page, pageSize }),
+            page,
+            pageSize,
+            totalCount,
+            totalPages,
+            previous = page > 1 && page - 1 <= totalPages
+                ? Url.Action(
+                    nameof(GetTitles),
+                    new { nconst, page = page - 1, pageSize })
+                : null,
+            next = page < totalPages
+                ? Url.Action(
+                    nameof(GetTitles),
+                    new { nconst, page = page + 1, pageSize })
+                : null,
+            items
+        });
     }
 }
