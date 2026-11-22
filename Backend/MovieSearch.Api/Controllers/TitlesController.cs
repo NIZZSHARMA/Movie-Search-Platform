@@ -14,6 +14,79 @@ public class TitlesController : ControllerBase
         _repository = repository;
     }
 
+    [HttpGet]
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken cancellationToken = default)
+    {
+        const int defaultPageSize = 10;
+        const int maximumPageSize = 100;
+
+        if (page < 1)
+        {
+            return BadRequest(new
+            {
+                message = "Page must be at least 1."
+            });
+        }
+
+        if (pageSize < 1 || pageSize > maximumPageSize)
+        {
+            pageSize = defaultPageSize;
+        }
+
+        var offset = ((long)page - 1) * pageSize;
+
+        if (offset > int.MaxValue)
+        {
+            return BadRequest(new
+            {
+                message = "Requested page is too large."
+            });
+        }
+
+        var totalCount = await _repository.CountAsync(
+            cancellationToken);
+
+        var totalPages = (int)Math.Ceiling(
+            totalCount / (double)pageSize);
+
+        var titles = await _repository.GetPageAsync(
+            (int)offset, pageSize, cancellationToken);
+
+        var items = titles.Select(title => new
+        {
+            url = Url.Action(
+                nameof(GetById),
+                new { tconst = title.Tconst }),
+            title.Tconst,
+            title.PrimaryTitle,
+            title.TitleType,
+            title.StartYear
+        });
+
+        return Ok(new
+        {
+            url = Url.Action(nameof(GetAll), new { page, pageSize }),
+            page,
+            pageSize,
+            totalCount,
+            totalPages,
+            previous = page > 1 && page - 1 <= totalPages
+                ? Url.Action(
+                    nameof(GetAll),
+                    new { page = page - 1, pageSize })
+                : null,
+            next = page < totalPages
+                ? Url.Action(
+                    nameof(GetAll),
+                    new { page = page + 1, pageSize })
+                : null,
+            items
+        });
+    }
+
     [HttpGet("{tconst}")]
     public async Task<IActionResult> GetById(
         string tconst,
