@@ -1,3 +1,4 @@
+using MovieSearch.Api.Dtos;
 using Microsoft.AspNetCore.Mvc;
 using MovieSearch.Api.Repositories;
 
@@ -55,16 +56,16 @@ public class PersonsController : ControllerBase
         var persons = await _repository.GetPageAsync(
             (int)offset, pageSize, cancellationToken);
 
-        var items = persons.Select(person => new
-        {
-            url = Url.Action(
-                nameof(GetById),
-                new { nconst = person.Nconst }),
-            person.Nconst,
-            person.PrimaryName,
-            person.BirthYear,
-            person.DeathYear
-        });
+       var items = persons.Select(person => new PersonDto
+{
+    Url = Url.Action(
+        nameof(GetById),
+        new { nconst = person.Nconst }),
+    Nconst = person.Nconst,
+    PrimaryName = person.PrimaryName,
+    BirthYear = person.BirthYear,
+    DeathYear = person.DeathYear
+});
 
         return Ok(new
         {
@@ -100,15 +101,15 @@ public class PersonsController : ControllerBase
             return NotFound();
         }
 
-        return Ok(new
-        {
-            url = Url.Action(
-                nameof(GetById),
-                new { nconst = person.Nconst }),
-            person.Nconst,
-            person.PrimaryName,
-            person.BirthYear,
-            person.DeathYear
-        });
+        return Ok(new PersonDto
+{
+    Url = Url.Action(
+        nameof(GetById),
+        new { nconst = person.Nconst }),
+    Nconst = person.Nconst,
+    PrimaryName = person.PrimaryName,
+    BirthYear = person.BirthYear,
+    DeathYear = person.DeathYear
+});
     }
 }
