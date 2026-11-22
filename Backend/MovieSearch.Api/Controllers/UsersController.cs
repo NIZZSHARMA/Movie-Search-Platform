@@ -1,3 +1,5 @@
+using System.Globalization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +11,7 @@ using Npgsql;
 namespace MovieSearch.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/users")]
 public class UsersController : ControllerBase
 {
@@ -28,6 +31,11 @@ public class UsersController : ControllerBase
         long userId,
         CancellationToken cancellationToken)
     {
+        if (!IsCurrentUser(userId))
+        {
+            return Forbid();
+        }
+
         var user = await _repository.GetByIdAsync(
             userId, cancellationToken);
 
@@ -39,6 +47,7 @@ public class UsersController : ControllerBase
         return Ok(ToDto(user));
     }
 
+    [AllowAnonymous]
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateUserDto request,
@@ -119,6 +128,11 @@ public class UsersController : ControllerBase
         [FromBody] UpdateUserDto request,
         CancellationToken cancellationToken)
     {
+        if (!IsCurrentUser(userId))
+        {
+            return Forbid();
+        }
+
         var user = await _repository.GetByIdAsync(
             userId, cancellationToken);
 
@@ -201,6 +215,18 @@ public class UsersController : ControllerBase
         }
 
         return Ok(ToDto(user));
+    }
+
+    private bool IsCurrentUser(long userId)
+    {
+        var subject = User.FindFirst("sub")?.Value;
+
+        return long.TryParse(
+                subject,
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var currentUserId)
+            && currentUserId == userId;
     }
 
     private UserDto ToDto(AppUser user)
