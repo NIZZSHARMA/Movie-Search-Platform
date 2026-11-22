@@ -20,6 +20,8 @@ public class MovieDbContext : DbContext
 
     public DbSet<Credit> Credits => Set<Credit>();
 
+    public DbSet<TitleRating> TitleRatings => Set<TitleRating>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -29,5 +31,9 @@ public class MovieDbContext : DbContext
 
         modelBuilder.Entity<Credit>()
             .HasKey(item => new { item.Tconst, item.Ordering });
+
+        modelBuilder.Entity<TitleRating>()
+            .HasNoKey()
+            .ToView("title_rating", "movie");
     }
 }
