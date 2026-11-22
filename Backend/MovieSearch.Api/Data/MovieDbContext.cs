@@ -21,6 +21,7 @@ public class MovieDbContext : DbContext
     public DbSet<Credit> Credits => Set<Credit>();
 
     public DbSet<TitleRating> TitleRatings => Set<TitleRating>();
+    public DbSet<AppUser> Users => Set<AppUser>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
