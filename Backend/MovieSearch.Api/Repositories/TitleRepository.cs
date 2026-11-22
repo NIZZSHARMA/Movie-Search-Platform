@@ -127,4 +127,13 @@ public class TitleRepository : ITitleRepository
             })
             .SingleOrDefaultAsync(cancellationToken);
     }
+        public Task<TitleRating?> GetRatingAsync(
+        string tconst,
+        CancellationToken cancellationToken = default)
+    {
+        return _context.TitleRatings
+            .SingleOrDefaultAsync(
+                rating => rating.Tconst == tconst,
+                cancellationToken);
+    }
 }

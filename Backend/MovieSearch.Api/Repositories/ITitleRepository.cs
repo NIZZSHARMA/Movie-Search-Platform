@@ -39,4 +39,8 @@ public interface ITitleRepository
         string tconst,
         int ordering,
         CancellationToken cancellationToken = default);
+
+    Task<TitleRating?> GetRatingAsync(
+        string tconst,
+        CancellationToken cancellationToken = default);
 }
