@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using MovieSearch.Api.Dtos;
 using MovieSearch.Api.Repositories;
 
 namespace MovieSearch.Api.Controllers;
@@ -55,20 +56,22 @@ public class TitlesController : ControllerBase
         var titles = await _repository.GetPageAsync(
             (int)offset, pageSize, cancellationToken);
 
-        var items = titles.Select(title => new
+        var items = titles.Select(title => new TitleSummaryDto
         {
-            url = Url.Action(
+            Url = Url.Action(
                 nameof(GetById),
                 new { tconst = title.Tconst }),
-            title.Tconst,
-            title.PrimaryTitle,
-            title.TitleType,
-            title.StartYear
+            Tconst = title.Tconst,
+            PrimaryTitle = title.PrimaryTitle,
+            TitleType = title.TitleType,
+            StartYear = title.StartYear
         });
 
         return Ok(new
         {
-            url = Url.Action(nameof(GetAll), new { page, pageSize }),
+            url = Url.Action(
+                nameof(GetAll),
+                new { page, pageSize }),
             page,
             pageSize,
             totalCount,
@@ -100,19 +103,19 @@ public class TitlesController : ControllerBase
             return NotFound();
         }
 
-        return Ok(new
+        return Ok(new TitleDetailsDto
         {
-            url = Url.Action(
+            Url = Url.Action(
                 nameof(GetById),
                 new { tconst = title.Tconst }),
-            title.Tconst,
-            title.TitleType,
-            title.PrimaryTitle,
-            title.OriginalTitle,
-            title.IsAdult,
-            title.StartYear,
-            title.EndYear,
-            title.RuntimeMinutes
+            Tconst = title.Tconst,
+            TitleType = title.TitleType,
+            PrimaryTitle = title.PrimaryTitle,
+            OriginalTitle = title.OriginalTitle,
+            IsAdult = title.IsAdult,
+            StartYear = title.StartYear,
+            EndYear = title.EndYear,
+            RuntimeMinutes = title.RuntimeMinutes
         });
     }
 }
