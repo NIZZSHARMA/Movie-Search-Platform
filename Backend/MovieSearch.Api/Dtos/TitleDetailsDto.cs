@@ -19,4 +19,9 @@ public class TitleDetailsDto
     public int? EndYear { get; set; }
 
     public int? RuntimeMinutes { get; set; }
+
+    public string? Plot { get; set; }
+
+    public string? Poster { get; set; }
+    
 }

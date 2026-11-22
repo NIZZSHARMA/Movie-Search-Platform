@@ -42,4 +42,16 @@ public class TitleRepository : ITitleRepository
             .Take(pageSize)
             .ToListAsync(cancellationToken);
     }
+
+    public Task<OmdbExtra?> GetOmdbExtraAsync(
+    string tconst,
+    CancellationToken cancellationToken = default)
+{
+    return _context.OmdbExtras
+        .AsNoTracking()
+        .SingleOrDefaultAsync(
+            extra => extra.Tconst == tconst,
+            cancellationToken);
+}
+
 }

@@ -15,4 +15,9 @@ public interface ITitleRepository
         int offset,
         int pageSize,
         CancellationToken cancellationToken = default);
+
+Task<OmdbExtra?> GetOmdbExtraAsync(
+    string tconst,
+    CancellationToken cancellationToken = default);
+    
 }
