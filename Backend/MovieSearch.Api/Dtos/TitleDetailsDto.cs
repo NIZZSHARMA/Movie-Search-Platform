@@ -23,7 +23,10 @@ public class TitleDetailsDto
     public string? Plot { get; set; }
 
     public string? Poster { get; set; }
-    
+
     public List<string> Genres { get; set; } = new();
 
+    public decimal? AverageRating { get; set; }
+
+    public long NumVotes { get; set; }
 }

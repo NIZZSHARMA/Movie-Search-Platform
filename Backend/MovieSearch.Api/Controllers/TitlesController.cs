@@ -109,6 +109,9 @@ public class TitlesController : ControllerBase
         var genres = await _repository.GetGenresAsync(
             title.Tconst, cancellationToken);
 
+        var rating = await _repository.GetRatingAsync(
+            title.Tconst, cancellationToken);
+
         return Ok(new TitleDetailsDto
         {
             Url = Url.Action(
@@ -124,7 +127,9 @@ public class TitlesController : ControllerBase
             RuntimeMinutes = title.RuntimeMinutes,
             Plot = extra?.Plot,
             Poster = extra?.Poster,
-            Genres = genres
+            Genres = genres,
+            AverageRating = rating?.AverageRating,
+            NumVotes = rating?.NumVotes ?? 0
         });
     }
 
