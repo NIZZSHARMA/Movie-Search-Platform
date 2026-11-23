@@ -22,9 +22,12 @@ public class MovieDbContext : DbContext
 
     public DbSet<TitleRating> TitleRatings => Set<TitleRating>();
     public DbSet<AppUser> Users => Set<AppUser>();
-    
+
     public DbSet<UserBookmarkTitle> UserBookmarkTitles
     => Set<UserBookmarkTitle>();
+
+    public DbSet<UserBookmarkPerson> UserBookmarkPersons
+    => Set<UserBookmarkPerson>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

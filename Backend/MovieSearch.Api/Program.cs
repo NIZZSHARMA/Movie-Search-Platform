@@ -43,6 +43,7 @@ builder.Services.AddScoped<ITitleRepository, TitleRepository>();
 builder.Services.AddScoped<IPersonRepository, PersonRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITitleBookmarkRepository, TitleBookmarkRepository>();
+builder.Services.AddScoped<IPersonBookmarkRepository, PersonBookmarkRepository>();
 
 builder.Services.AddScoped<
     IPasswordHasher<AppUser>,
