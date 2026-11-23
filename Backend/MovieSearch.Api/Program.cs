@@ -45,6 +45,8 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ITitleBookmarkRepository, TitleBookmarkRepository>();
 builder.Services.AddScoped<IPersonBookmarkRepository, PersonBookmarkRepository>();
 builder.Services.AddScoped<IUserRatingRepository, UserRatingRepository>();
+builder.Services.AddScoped<ISearchRepository, SearchRepository>();
+builder.Services.AddScoped<ISearchHistoryRepository, SearchHistoryRepository>();
 
 builder.Services.AddScoped<
     IPasswordHasher<AppUser>,

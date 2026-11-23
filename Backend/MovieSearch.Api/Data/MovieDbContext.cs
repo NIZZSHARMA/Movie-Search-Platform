@@ -32,6 +32,9 @@ public class MovieDbContext : DbContext
     public DbSet<UserTitleRating> UserTitleRatings
     => Set<UserTitleRating>();
 
+    public DbSet<UserSearchHistory> UserSearchHistories
+    => Set<UserSearchHistory>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
