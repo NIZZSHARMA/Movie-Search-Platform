@@ -29,6 +29,9 @@ public class MovieDbContext : DbContext
     public DbSet<UserBookmarkPerson> UserBookmarkPersons
     => Set<UserBookmarkPerson>();
 
+    public DbSet<UserTitleRating> UserTitleRatings
+    => Set<UserTitleRating>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
